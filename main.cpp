@@ -64,7 +64,7 @@ void loadtxt(std::string filename, Eigen::MatrixXf &M)
   while (std::getline(inputFile, line))
   {
     std::istringstream iss(line);
-    int val;
+    float val;
     while (iss >> val)
     {
       values.push_back(val);

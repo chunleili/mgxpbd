@@ -30,6 +30,7 @@ float alpha = compliance * (1.0 / h / h);
 unsigned num_particles = 0;
 
 Eigen::MatrixXd pos_vis;  // vertex positions
+Eigen::MatrixXd pos_orig; 
 Eigen::MatrixXi tri;  // triangle indices
 
 Field3f pos;
@@ -256,26 +257,8 @@ std::string get_directory_path(const std::string &filePath)
 /*                          end of utility functions                          */
 /* -------------------------------------------------------------------------- */
 
-int main(int argc, char *argv[])
+void visualization()
 {
-  // find the project directory path
-  std::string main_path = __FILE__;
-  proj_dir_path = get_directory_path(main_path);
-  std::cout << "Project directory path: " << proj_dir_path << std::endl;
-
-  // Load a mesh
-  igl::readOFF(proj_dir_path + "/data/models/bunny.OFF", pos_vis, tri);
-  auto pos_orig = pos_vis; // keep original position for reset
-
-  num_particles = pos_vis.rows();
-
-  pos.resize(num_particles);
-
-  copy_pos_init();
-
-  loadtxt(proj_dir_path + "/data/misc/edge.txt", edge);
-  // loadtxt(proj_dir_path + "/data/misc/rest_len.txt", rest_len);
-
   // Visualization
   igl::opengl::glfw::Viewer viewer;
   viewer.data().set_mesh(pos_vis, tri);
@@ -322,4 +305,29 @@ int main(int argc, char *argv[])
   viewer.data().set_face_based(true);
 
   viewer.launch();
+}
+
+
+
+int main(int argc, char *argv[])
+{
+  // find the project directory path
+  std::string main_path = __FILE__;
+  proj_dir_path = get_directory_path(main_path);
+  std::cout << "Project directory path: " << proj_dir_path << std::endl;
+
+  // Load a mesh
+  igl::readOFF(proj_dir_path + "/data/models/bunny.OFF", pos_vis, tri);
+  pos_orig = pos_vis; // keep original position for reset
+
+  num_particles = pos_vis.rows();
+
+  pos.resize(num_particles);
+
+  copy_pos_init();
+
+  loadtxt(proj_dir_path + "/data/misc/edge.txt", edge);
+  // loadtxt(proj_dir_path + "/data/misc/rest_len.txt", rest_len);
+
+  visualization();
 }

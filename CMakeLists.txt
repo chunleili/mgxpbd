@@ -43,6 +43,6 @@ target_link_libraries(main PUBLIC
   # igl_restricted::triangle
   )
 
-target_sources(main extern/mmio/mmio.c)
+target_sources(main PRIVATE extern/mmio/mmio.c)
 target_include_directories(main PUBLIC extern/mmio)
 

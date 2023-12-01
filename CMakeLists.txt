@@ -7,6 +7,7 @@ set(use_CUDA ON CACHE BOOL "Use CUDA")
 if(use_CUDA)
   find_package(CUDA REQUIRED)
   cuda_add_executable(main_cu main.cu)
+  target_include_directories(main_cu PUBLIC extern/libigl/include)
 else()
 
 

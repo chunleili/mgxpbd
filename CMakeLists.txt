@@ -2,12 +2,14 @@ cmake_minimum_required(VERSION 3.25)
 set(CMAKE_CXX_STANDARD 17)
 project(mgxpbd)
 
-set(use_CUDA ON CACHE BOOL "Use CUDA")
+option(use_CUDA "Build with CUDA support" ON)
+message(STATUS "Use CUDA: ${use_CUDA}")
 
 if(use_CUDA)
-  find_package(CUDA REQUIRED)
-  cuda_add_executable(main_cu main.cu)
+  enable_language(CUDA)
+  add_executable(main_cu main.cu)
   target_include_directories(main_cu PUBLIC extern/libigl/include)
+  target_include_directories(main_cu PUBLIC include)
 else()
 
 

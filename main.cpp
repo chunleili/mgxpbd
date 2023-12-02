@@ -4,7 +4,6 @@
 #include <string>
 #include <fstream>
 #include <vector>
-#include "utils.h"
 
 using namespace Eigen;
 using namespace std;

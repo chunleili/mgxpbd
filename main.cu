@@ -122,13 +122,15 @@ public:
 
 inline void tic()
 {
+    sdkResetTimer(&timer_global);
     sdkStartTimer(&timer_global); // start the timer_global
 }
 
-inline void toc()
+inline void toc(string message = "")
 {
     sdkStopTimer(&timer_global);
-    printf("global timer: %f (ms)\n", sdkGetTimerValue(&timer_global));
+    printf("%s(timer_global): %f (ms)\n", message.c_str(), sdkGetTimerValue(&timer_global));
+    sdkResetTimer(&timer_global);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -303,7 +305,7 @@ int main(int argc, char *argv[])
 
     // igl::writeOBJ(proj_dir_path + "/data/models/bunny2.obj", pos_vis, tri);
 
-    toc();
+    toc("main time");
     t.end();
 
     // stop and destroy timer_main

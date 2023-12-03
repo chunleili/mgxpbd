@@ -9,8 +9,14 @@ if(use_CUDA)
   enable_language(CUDA)
   add_executable(main_cu main.cu)
   target_include_directories(main_cu PUBLIC extern/libigl/include)
+  target_include_directories(main_cu PUBLIC extern)
   target_include_directories(main_cu PUBLIC include)
   target_compile_options(main_cu PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
+
+  # mmio
+  add_executable(mmread 
+  extern/mmio/example_read.c 
+  extern/mmio/mmio.c)
 else()
 
 

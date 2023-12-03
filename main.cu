@@ -16,6 +16,8 @@
 #include "helper_timer.h"
 
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include <unsupported/Eigen/SparseExtra>
 #include "igl/readOBJ.h"
 #include "igl/writeOBJ.h"
 
@@ -75,6 +77,9 @@ std::string get_proj_dir_path()
     std::cout << "Project directory path: " << proj_dir_path << std::endl;
     return proj_dir_path;
 }
+// this code run before main, in case of user forget to call get_proj_dir_path()
+static string proj_dir_path_pre_get = get_proj_dir_path();
+
 
 // learn from https://github.com/parallel101/course/blob/2d30da61b442008c003f69225e6feca20a4ca7df/08/06_thrust/01/main.cu
 template <class Func>
@@ -192,6 +197,19 @@ void render_loop()
     }
 }
 
+void load_R_P()
+{
+    // load R, P
+    Eigen::SparseMatrix<double> R, P;
+
+    Eigen::loadMarket(R, proj_dir_path+"/data/misc/R.mtx");
+    Eigen::loadMarket(P, proj_dir_path+"/data/misc/P.mtx");
+
+    std::cout<<"R: "<<R.rows()<<" "<<R.cols() <<std::endl;
+    std::cout<<"P: "<<P.rows()<<" "<<P.cols() <<std::endl;
+}
+
+
 void run_simulation()
 {
     printf("run_simulation\n");
@@ -204,6 +222,8 @@ void run_simulation()
     edge.resize(NE);
     rest_len.resize(NE);
     init_edge();
+
+    load_R_P();
 
     // render_loop();
 
@@ -227,8 +247,6 @@ int main(int argc, char *argv[])
 
     Timer t;
     t.start();
-
-    get_proj_dir_path();
 
     // Load a mesh
     igl::readOBJ(proj_dir_path + "/data/models/cloth.obj", pos_vis, tri);

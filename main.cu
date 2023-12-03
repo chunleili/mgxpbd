@@ -5,6 +5,7 @@
 #include <sstream>
 #include <cstdio>
 #include <cmath>
+#include <chrono>
 
 #include <cuda_runtime.h>
 #include <thrust/universal_vector.h>
@@ -57,8 +58,8 @@ unsigned num_particles = 0;
 unsigned frame_num = 0;
 unsigned end_frame = 1000;
 unsigned max_iter = 50;
-// out_dir = f"./result/cloth3d_256_50_amg/"
 std::string out_dir = "./result/cloth3d_256_50_amg/";
+StopWatchInterface *timer_global = NULL;
 
 // utility functions
 std::string get_proj_dir_path()
@@ -84,6 +85,45 @@ __global__ void parallel_for(int n, Func func)
     {
         func(i);
     }
+}
+
+// Usage:
+//  Timer t;
+//  t.start();
+//  //do something
+//  t.end();
+class Timer
+{
+private:
+    std::chrono::time_point<std::chrono::steady_clock> m_start;
+    std::chrono::time_point<std::chrono::steady_clock> m_end;
+
+public:
+    inline void start()
+    {
+        m_start = std::chrono::steady_clock::now();
+    };
+    inline void end()
+    {
+        m_end = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed_seconds = m_end - m_start;
+        printf("elapsed: %.4f (s)\n", elapsed_seconds.count());
+    };
+    const auto get_time() const
+    {
+        return std::chrono::steady_clock::now();
+    };
+};
+
+inline void tic()
+{
+    sdkStartTimer(&timer_global); // start the timer_global
+}
+
+inline void toc()
+{
+    sdkStopTimer(&timer_global);
+    printf("global timer: %f (ms)\n", sdkGetTimerValue(&timer_global));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -159,7 +199,7 @@ void run_simulation()
     // create and start timer_sim
     StopWatchInterface *timer_sim = NULL;
     sdkCreateTimer(&timer_sim);
-    sdkStartTimer(&timer_sim);// start the timer_sim
+    sdkStartTimer(&timer_sim); // start the timer_sim
 
     edge.resize(NE);
     rest_len.resize(NE);
@@ -169,16 +209,24 @@ void run_simulation()
 
     // stop and destroy timer_sim
     sdkStopTimer(&timer_sim);
-    printf("%s time: %f (ms)\n",__func__, sdkGetTimerValue(&timer_sim));
+    printf("%s time: %f (ms)\n", __func__, sdkGetTimerValue(&timer_sim));
     sdkDeleteTimer(&timer_sim);
 }
 
 int main(int argc, char *argv[])
 {
+    // global timer
+    sdkCreateTimer(&timer_global);
+
     // create and start timer_main
     StopWatchInterface *timer_main = NULL;
     sdkCreateTimer(&timer_main);
-    sdkStartTimer(&timer_main);// start the timer_main
+    sdkStartTimer(&timer_main); // start the timer_main
+
+    tic();
+
+    Timer t;
+    t.start();
 
     get_proj_dir_path();
 
@@ -237,9 +285,14 @@ int main(int argc, char *argv[])
 
     // igl::writeOBJ(proj_dir_path + "/data/models/bunny2.obj", pos_vis, tri);
 
+    toc();
+    t.end();
 
     // stop and destroy timer_main
     sdkStopTimer(&timer_main);
-    printf("%s time: %f (ms)\n",__func__, sdkGetTimerValue(&timer_main));
+    printf("%s time: %f (ms)\n", __func__, sdkGetTimerValue(&timer_main));
     sdkDeleteTimer(&timer_main);
+
+    // del global timer
+    sdkDeleteTimer(&timer_global);
 }

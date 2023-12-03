@@ -12,6 +12,7 @@
 #include <thrust/device_vector.h>
 #include "helper_cuda.h"
 #include "helper_math.h"
+#include "helper_timer.h"
 
 #include <Eigen/Dense>
 #include "igl/readOBJ.h"
@@ -154,15 +155,31 @@ void render_loop()
 void run_simulation()
 {
     printf("run_simulation\n");
+
+    // create and start timer_sim
+    StopWatchInterface *timer_sim = NULL;
+    sdkCreateTimer(&timer_sim);
+    sdkStartTimer(&timer_sim);// start the timer_sim
+
     edge.resize(NE);
     rest_len.resize(NE);
     init_edge();
 
     // render_loop();
+
+    // stop and destroy timer_sim
+    sdkStopTimer(&timer_sim);
+    printf("%s time: %f (ms)\n",__func__, sdkGetTimerValue(&timer_sim));
+    sdkDeleteTimer(&timer_sim);
 }
 
 int main(int argc, char *argv[])
 {
+    // create and start timer_main
+    StopWatchInterface *timer_main = NULL;
+    sdkCreateTimer(&timer_main);
+    sdkStartTimer(&timer_main);// start the timer_main
+
     get_proj_dir_path();
 
     // Load a mesh
@@ -219,4 +236,10 @@ int main(int argc, char *argv[])
     }
 
     // igl::writeOBJ(proj_dir_path + "/data/models/bunny2.obj", pos_vis, tri);
+
+
+    // stop and destroy timer_main
+    sdkStopTimer(&timer_main);
+    printf("%s time: %f (ms)\n",__func__, sdkGetTimerValue(&timer_main));
+    sdkDeleteTimer(&timer_main);
 }

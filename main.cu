@@ -53,6 +53,15 @@ Eigen::MatrixXi tri;
 Field3f pos;
 Field2i edge;
 Field1f rest_len;
+Field3f vel;
+Field1f inv_mass;
+Field1f lagrangian;
+Field1f constraints;
+Field1f dLambda;
+Field3f pos_mid;
+Field3f acc_pos;
+Field3f old_pos;
+
 
 // contorl variables
 std::string proj_dir_path;
@@ -62,6 +71,7 @@ unsigned end_frame = 1000;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 StopWatchInterface *timer_global = NULL;
+bool output_mesh = true;
 
 // utility functions
 std::string get_proj_dir_path()
@@ -133,6 +143,18 @@ inline void toc(string message = "")
     sdkResetTimer(&timer_global);
 }
 
+
+void copy_pos_to_pos_vis()
+{
+    // copy pos to pos_vis
+    for (int i = 0; i < num_particles; i++)
+    {
+        pos_vis(i, 0) = pos[i].x;
+        pos_vis(i, 1) = pos[i].y;
+        pos_vis(i, 2) = pos[i].z;
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                            simulation functions                            */
 /* -------------------------------------------------------------------------- */
@@ -191,11 +213,156 @@ void init_edge()
     }
 }
 
-void render_loop()
-{
 
+
+void semi_euler()
+{
+    float3 gravity = make_float3(0.0, -0.1, 0.0);
+    for (int i = 0; i < num_particles; i++)
+    {
+        if (inv_mass[i] != 0.0)
+        {
+            vel[i] += h * gravity;
+            old_pos[i] = pos[i];
+            pos[i] += h * vel[i];
+        }
+    }
+}
+
+
+void reset_lagrangian()
+{
+    for (int i = 0; i < NE; i++)
+    {
+        lagrangian[i] = 0.0;
+    }
+}
+
+void reset_accpos()
+{
+    for (int i = 0; i < num_particles; i++)
+    {
+        acc_pos[i] = make_float3(0.0, 0.0, 0.0);
+    }
+}
+
+void solve_constraints_xpbd()
+{
+    for (int i = 0; i < NE; i++)
+    {
+        int idx0 = edge[i].x;
+        int idx1 = edge[i].y;
+        float invM0 = inv_mass[idx0];
+        float invM1 = inv_mass[idx1];
+        float3 dis = pos[idx0] - pos[idx1];
+        float constraint = length(dis) - rest_len[i];
+        float3 gradient = normalize(dis);
+        float l = -constraint / (invM0 + invM1);
+        if (invM0 != 0.0)
+        {
+            acc_pos[idx0] += invM0 * l * gradient;
+        }
+        if (invM1 != 0.0)
+        {
+            acc_pos[idx1] -= invM1 * l * gradient;
+        }
+    }
+}
+
+
+void update_pos()
+{
+    for (int i = 0; i < num_particles; i++)
+    {
+        if (inv_mass[i] != 0.0)
+        {
+            pos[i] += 0.5 * acc_pos[i];
+        }
+    }
+}
+
+
+void collision()
+{
+    for (int i = 0; i < num_particles; i++)
+    {
+        if (pos[i].z < -2.0)
+        {
+            pos[i].z = 0.0;
+        }
+    }
+}
+
+void update_vel()
+{
+    for (int i = 0; i < num_particles; i++)
+    {
+        if (inv_mass[i] != 0.0)
+        {
+            vel[i] = (pos[i] - old_pos[i]) / h;
+        }
+    }
+}
+
+
+// def step_xpbd(max_iter):
+//     semi_euler(old_pos, inv_mass, vel, pos)
+//     reset_lagrangian(lagrangian)
+
+//     residual = np.zeros((max_iter+1),float)
+//     calc_dual_residual(dual_residual, edge, rest_len, lagrangian, pos)
+//     residual[0] = np.linalg.norm(dual_residual.to_numpy())
+
+//     for i in range(max_iter):
+//         reset_accpos(acc_pos)
+//         # solve_subspace_constraints_xpbd(labels, numerator, denominator, numerator_lumped, denominator_lumped, y_jprime, dLambda, inv_mass, edge, rest_len, lagrangian, acc_pos, pos)
+//         solve_constraints_xpbd(dual_residual, inv_mass, edge, rest_len, lagrangian, acc_pos, pos)
+//         update_pos(inv_mass, acc_pos, pos)
+//         collision(pos)
+
+//         residual[i+1] = np.linalg.norm(dual_residual.to_numpy())
+//     np.savetxt(out_dir + f"residual_{frame_num}.txt",residual)
+
+//     update_vel(old_pos, inv_mass, vel, pos)
+
+
+void substep_xpbd(int max_iter)
+{
+    semi_euler();
+    reset_lagrangian();
+    for (int i = 0; i <= max_iter; i++)
+    {
+        reset_accpos();
+        solve_constraints_xpbd();
+        update_pos();
+        collision();
+    }
+    update_vel();
+}
+
+
+void main_loop()
+{
     for (frame_num = 0; frame_num <= end_frame; frame_num++)
     {
+        printf("frame_num = %d\n", frame_num);
+        tic();
+        substep_xpbd(max_iter);
+        toc("substep_xpbd");
+
+        if (output_mesh)
+        {   
+            tic();
+            std::string out_mesh_name = proj_dir_path + "/results/" + std::to_string(frame_num) + ".obj";
+
+            printf("output mesh: %s\n", out_mesh_name.c_str());
+            copy_pos_to_pos_vis();
+            igl::writeOBJ(out_mesh_name, pos_vis, tri);
+            toc("output mesh");
+        }
+
+        printf("frame_num = %d done\n", frame_num);
+        printf("---------\n\n\n");
     }
 }
 
@@ -212,6 +379,24 @@ void load_R_P()
 }
 
 
+
+void resize_fields()
+{
+    pos.resize(num_particles);
+    edge.resize(NE);
+    rest_len.resize(NE);
+    vel.resize(num_particles);
+    inv_mass.resize(num_particles);
+    lagrangian.resize(NE);
+    constraints.resize(NE);
+    dLambda.resize(NE);
+    pos_mid.resize(num_particles);
+    acc_pos.resize(num_particles);
+    old_pos.resize(num_particles);
+
+}
+
+
 void run_simulation()
 {
     printf("run_simulation\n");
@@ -221,13 +406,15 @@ void run_simulation()
     sdkCreateTimer(&timer_sim);
     sdkStartTimer(&timer_sim); // start the timer_sim
 
+    resize_fields();
+
     edge.resize(NE);
     rest_len.resize(NE);
     init_edge();
 
     load_R_P();
 
-    // render_loop();
+    main_loop();
 
     // stop and destroy timer_sim
     sdkStopTimer(&timer_sim);

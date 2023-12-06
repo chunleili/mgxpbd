@@ -39,19 +39,13 @@ using Field1f = thrust::universal_vector<float>;
 using Field3f = thrust::universal_vector<float3>;
 using Field3i = thrust::universal_vector<int3>;
 using Field2i = thrust::universal_vector<int2>;
+using Field1i = thrust::universal_vector<int>;
 
-using Field1f_host = thrust::host_vector<float>;
-using Field3f_host = thrust::host_vector<float3>;
-using Field3i_host = thrust::host_vector<int3>;
-using Field2i_host = thrust::host_vector<int2>;
-
-// we have to use pos_vis because libigl uses Eigen::MatrixXd
-Eigen::MatrixXd pos_vis; // vertex positions for visualization
-Eigen::MatrixXi tri;
 
 // global fields
 Field3f pos;
 Field2i edge;
+Field1i tri;
 Field1f rest_len;
 Field3f vel;
 Field1f inv_mass;
@@ -62,6 +56,9 @@ Field3f pos_mid;
 Field3f acc_pos;
 Field3f old_pos;
 
+// we have to use pos_vis for visualization because libigl uses Eigen::MatrixXd
+Eigen::MatrixXd pos_vis;
+Eigen::MatrixXi tri_vis;
 
 // contorl variables
 std::string proj_dir_path;
@@ -114,21 +111,30 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> m_end;
 
 public:
+    std::string name="";
+    Timer(std::string name="") : name(name) {};
     inline void start()
     {
         m_start = std::chrono::steady_clock::now();
     };
-    inline void end()
+    inline void end(string message = "")
     {
         m_end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = m_end - m_start;
-        printf("elapsed: %.4f (s)\n", elapsed_seconds.count());
+        printf("%s(%s) elapsed: %.4f(s)\n", message.c_str(), name.c_str(), elapsed_seconds.count());
+    };
+    inline void reset()
+    {
+        m_start = std::chrono::steady_clock::now();
+        m_end = std::chrono::steady_clock::now();
     };
     const auto get_time() const
     {
         return std::chrono::steady_clock::now();
     };
 };
+Timer t_sim("sim"), t_main("main"), t_substep("substep");
+
 
 inline void tic()
 {
@@ -305,27 +311,6 @@ void update_vel()
 }
 
 
-// def step_xpbd(max_iter):
-//     semi_euler(old_pos, inv_mass, vel, pos)
-//     reset_lagrangian(lagrangian)
-
-//     residual = np.zeros((max_iter+1),float)
-//     calc_dual_residual(dual_residual, edge, rest_len, lagrangian, pos)
-//     residual[0] = np.linalg.norm(dual_residual.to_numpy())
-
-//     for i in range(max_iter):
-//         reset_accpos(acc_pos)
-//         # solve_subspace_constraints_xpbd(labels, numerator, denominator, numerator_lumped, denominator_lumped, y_jprime, dLambda, inv_mass, edge, rest_len, lagrangian, acc_pos, pos)
-//         solve_constraints_xpbd(dual_residual, inv_mass, edge, rest_len, lagrangian, acc_pos, pos)
-//         update_pos(inv_mass, acc_pos, pos)
-//         collision(pos)
-
-//         residual[i+1] = np.linalg.norm(dual_residual.to_numpy())
-//     np.savetxt(out_dir + f"residual_{frame_num}.txt",residual)
-
-//     update_vel(old_pos, inv_mass, vel, pos)
-
-
 void substep_xpbd(int max_iter)
 {
     semi_euler();
@@ -345,6 +330,7 @@ void main_loop()
 {
     for (frame_num = 0; frame_num <= end_frame; frame_num++)
     {
+        printf("---------\n");
         printf("frame_num = %d\n", frame_num);
         tic();
         substep_xpbd(max_iter);
@@ -357,12 +343,12 @@ void main_loop()
 
             printf("output mesh: %s\n", out_mesh_name.c_str());
             copy_pos_to_pos_vis();
-            igl::writeOBJ(out_mesh_name, pos_vis, tri);
+            igl::writeOBJ(out_mesh_name, pos_vis, tri_vis);
             toc("output mesh");
         }
 
         printf("frame_num = %d done\n", frame_num);
-        printf("---------\n\n\n");
+        printf("---------\n\n");
     }
 }
 
@@ -393,33 +379,86 @@ void resize_fields()
     pos_mid.resize(num_particles);
     acc_pos.resize(num_particles);
     old_pos.resize(num_particles);
+    tri.resize(3*NT);
 
+    tri_vis.resize(NT, 3);
+    pos_vis.resize(num_particles, 3);
 }
 
+
+void init_pos()
+{
+    for (int i = 0; i < N + 1; i++)
+    {
+        for (int j = 0; j < N + 1; j++)
+        {
+            int idx = i * (N + 1) + j;
+            // pos[idx] = ti.Vector([i / N,  j / N, 0.5])  # vertical hang
+            pos[idx] = make_float3(i / float(N), 0.5, j / float(N)); // horizontal hang
+            inv_mass[idx] = 1.0;
+        }
+    }
+    inv_mass[N] = 0.0;
+    inv_mass[NV - 1] = 0.0;
+}
+
+void init_tri()
+{
+    for (int i = 0; i < N; i++)
+    {
+        for (int j = 0; j < N; ++j)
+        {
+            int tri_idx = 6 * (i * N + j);
+            int pos_idx = i * (N + 1) + j;
+            if ((i + j) % 2 == 0)
+            {
+                tri[tri_idx + 0] = pos_idx;
+                tri[tri_idx + 1] = pos_idx + N + 2;
+                tri[tri_idx + 2] = pos_idx + 1;
+                tri[tri_idx + 3] = pos_idx;
+                tri[tri_idx + 4] = pos_idx + N + 1;
+                tri[tri_idx + 5] = pos_idx + N + 2;
+            }
+            else
+            {
+                tri[tri_idx + 0] = pos_idx;
+                tri[tri_idx + 1] = pos_idx + N + 1;
+                tri[tri_idx + 2] = pos_idx + 1;
+                tri[tri_idx + 3] = pos_idx + 1;
+                tri[tri_idx + 4] = pos_idx + N + 1;
+                tri[tri_idx + 5] = pos_idx + N + 2;
+            }
+        }
+    }
+
+    // reshape tri from 3*NT to (NT, 3)
+    for (int i = 0; i < NT; i++)
+    {
+        int tri_idx = 3 * i;
+        int pos_idx = 3 * i;
+        tri_vis(i, 0) = tri[tri_idx + 0];
+        tri_vis(i, 1) = tri[tri_idx + 1];
+        tri_vis(i, 2) = tri[tri_idx + 2];
+    }
+}
 
 void run_simulation()
 {
     printf("run_simulation\n");
 
-    // create and start timer_sim
-    StopWatchInterface *timer_sim = NULL;
-    sdkCreateTimer(&timer_sim);
-    sdkStartTimer(&timer_sim); // start the timer_sim
+    t_sim.start();
 
     resize_fields();
 
-    edge.resize(NE);
-    rest_len.resize(NE);
+    init_pos();
     init_edge();
+    init_tri();
 
     load_R_P();
 
     main_loop();
-
-    // stop and destroy timer_sim
-    sdkStopTimer(&timer_sim);
-    printf("%s time: %f (ms)\n", __func__, sdkGetTimerValue(&timer_sim));
-    sdkDeleteTimer(&timer_sim);
+    
+    t_sim.end("sim");
 }
 
 int main(int argc, char *argv[])
@@ -432,26 +471,13 @@ int main(int argc, char *argv[])
     sdkCreateTimer(&timer_main);
     sdkStartTimer(&timer_main); // start the timer_main
 
-    tic();
-
-    Timer t;
-    t.start();
+    t_main.start();
 
     // Load a mesh
-    igl::readOBJ(proj_dir_path + "/data/models/cloth.obj", pos_vis, tri);
-
-    num_particles = pos_vis.rows();
-
+    // igl::readOBJ(proj_dir_path + "/data/models/cloth.obj", pos_vis, tri);
+    // num_particles = pos_vis.rows();
+    num_particles = NV;
     printf("num_particles = %d\n", num_particles);
-
-    // copy pos_vis to vector<float3> pos
-    pos.resize(num_particles);
-    for (int i = 0; i < num_particles; i++)
-    {
-        pos[i].x = pos_vis(i, 0);
-        pos[i].y = pos_vis(i, 1);
-        pos[i].z = pos_vis(i, 2);
-    }
 
     run_simulation();
 
@@ -461,39 +487,11 @@ int main(int argc, char *argv[])
     // });
     // checkCudaErrors(cudaDeviceSynchronize());
 
-    // copy pos to pos_vis
-    for (int i = 0; i < num_particles; i++)
-    {
-        pos_vis(i, 0) = pos[i].x;
-        pos_vis(i, 1) = pos[i].y;
-        pos_vis(i, 2) = pos[i].z;
-    }
-
-    // print 10 vertices
-    printf("print 10 vertices:\n");
-    for (int i = 0; i < 10; i++)
-    {
-        printf("pos[%d] = (%f, %f, %f)\n", i, pos[i].x, pos[i].y, pos[i].z);
-    }
-
-    // print 10 lines of edge
-    printf("print 10 edges:\n");
-    for (int i = 0; i < 10; i++)
-    {
-        printf("edge[%d] = (%d, %d)\n", i, edge[i].x, edge[i].y);
-    }
-
-    // print 10 lines of rest_len
-    printf("print 10 rest_len:\n");
-    for (int i = 0; i < 10; i++)
-    {
-        printf("rest_len[%d] = %f\n", i, rest_len[i]);
-    }
+    copy_pos_to_pos_vis();
 
     // igl::writeOBJ(proj_dir_path + "/data/models/bunny2.obj", pos_vis, tri);
 
-    toc("main time");
-    t.end();
+    t_main.end();
 
     // stop and destroy timer_main
     sdkStopTimer(&timer_main);

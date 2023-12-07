@@ -1,1 +1,2 @@
-remove-item -path ".\results\*" -Recurse
+# remove-item except .gitignore
+remove-item -path ".\results\*" -Recurse -exclude .gitignore

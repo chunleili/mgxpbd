@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <cmath>
 #include <chrono>
-#include<filesystem>
+#include <filesystem>
 
 #include <cuda_runtime.h>
 #include <thrust/universal_vector.h>
@@ -41,7 +41,6 @@ using Field3f = thrust::universal_vector<float3>;
 using Field3i = thrust::universal_vector<int3>;
 using Field2i = thrust::universal_vector<int2>;
 using Field1i = thrust::universal_vector<int>;
-
 
 // global fields
 Field3f pos;
@@ -85,7 +84,6 @@ std::string get_proj_dir_path()
 // this code run before main, in case of user forget to call get_proj_dir_path()
 static string proj_dir_path_pre_get = get_proj_dir_path();
 
-
 // learn from https://github.com/parallel101/course/blob/2d30da61b442008c003f69225e6feca20a4ca7df/08/06_thrust/01/main.cu
 template <class Func>
 __global__ void parallel_for(int n, Func func)
@@ -96,7 +94,6 @@ __global__ void parallel_for(int n, Func func)
         func(i);
     }
 }
-
 
 /// @brief Usage: Timer t("timer_name");
 ///               t.start();
@@ -109,8 +106,8 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> m_end;
 
 public:
-    std::string name="";
-    Timer(std::string name="") : name(name) {};
+    std::string name = "";
+    Timer(std::string name = "") : name(name){};
     inline void start()
     {
         m_start = std::chrono::steady_clock::now();
@@ -119,7 +116,7 @@ public:
     {
         m_end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = m_end - m_start;
-        printf("%s time elapsed: %.4f(s)\n",  name.c_str(), elapsed_seconds.count());
+        printf("%s time elapsed: %.4f(s)\n", name.c_str(), elapsed_seconds.count());
     };
     inline void reset()
     {
@@ -128,7 +125,6 @@ public:
     };
 };
 Timer t_sim("sim"), t_main("main"), t_substep("substep");
-
 
 /// @brief Usage: SdkTimer t("timer_name");
 ///               t.start();
@@ -140,8 +136,8 @@ private:
     StopWatchInterface *m_timer = NULL;
 
 public:
-    std::string name="";
-    SdkTimer(std::string name_="") : name(name_)
+    std::string name = "";
+    SdkTimer(std::string name_ = "") : name(name_)
     {
         sdkCreateTimer(&m_timer);
     }
@@ -180,7 +176,6 @@ inline void toc(string message = "")
     printf("%s(timer_global): %f (ms)\n", message.c_str(), sdkGetTimerValue(&timer_global));
     sdkResetTimer(&timer_global);
 }
-
 
 void copy_pos_to_pos_vis()
 {
@@ -251,8 +246,6 @@ void init_edge()
     }
 }
 
-
-
 void semi_euler()
 {
     float3 gravity = make_float3(0.0, -0.1, 0.0);
@@ -266,7 +259,6 @@ void semi_euler()
         }
     }
 }
-
 
 void reset_lagrangian()
 {
@@ -307,7 +299,6 @@ void solve_constraints_xpbd()
     }
 }
 
-
 void update_pos()
 {
     for (int i = 0; i < num_particles; i++)
@@ -318,7 +309,6 @@ void update_pos()
         }
     }
 }
-
 
 void collision()
 {
@@ -342,7 +332,6 @@ void update_vel()
     }
 }
 
-
 void substep_xpbd(int max_iter)
 {
     semi_euler();
@@ -356,7 +345,6 @@ void substep_xpbd(int max_iter)
     }
     update_vel();
 }
-
 
 void main_loop()
 {
@@ -372,7 +360,7 @@ void main_loop()
         toc("substep_xpbd");
 
         if (output_mesh)
-        {   
+        {
             tic();
             std::string out_mesh_name = proj_dir_path + "/results/" + std::to_string(frame_num) + ".obj";
 
@@ -392,14 +380,12 @@ void load_R_P()
     // load R, P
     Eigen::SparseMatrix<double> R, P;
 
-    Eigen::loadMarket(R, proj_dir_path+"/data/misc/R.mtx");
-    Eigen::loadMarket(P, proj_dir_path+"/data/misc/P.mtx");
+    Eigen::loadMarket(R, proj_dir_path + "/data/misc/R.mtx");
+    Eigen::loadMarket(P, proj_dir_path + "/data/misc/P.mtx");
 
-    std::cout<<"R: "<<R.rows()<<" "<<R.cols() <<std::endl;
-    std::cout<<"P: "<<P.rows()<<" "<<P.cols() <<std::endl;
+    std::cout << "R: " << R.rows() << " " << R.cols() << std::endl;
+    std::cout << "P: " << P.rows() << " " << P.cols() << std::endl;
 }
-
-
 
 void resize_fields()
 {
@@ -414,12 +400,11 @@ void resize_fields()
     pos_mid.resize(num_particles);
     acc_pos.resize(num_particles);
     old_pos.resize(num_particles);
-    tri.resize(3*NT);
+    tri.resize(3 * NT);
 
     tri_vis.resize(NT, 3);
     pos_vis.resize(num_particles, 3);
 }
-
 
 void init_pos()
 {
@@ -496,7 +481,7 @@ void run_simulation()
     t_init.end();
 
     main_loop();
-    
+
     t_sim.end();
 }
 

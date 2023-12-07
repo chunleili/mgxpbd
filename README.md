@@ -26,7 +26,7 @@ Build steps:
 
 ## Run
 ```
-./build/Release/main_cu.exe
+./build/Release/main.exe
 ```
 
 Output files locate in results folder.

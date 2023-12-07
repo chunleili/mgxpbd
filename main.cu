@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cmath>
 #include <chrono>
+#include<filesystem>
 
 #include <cuda_runtime.h>
 #include <thrust/universal_vector.h>
@@ -73,13 +74,9 @@ bool output_mesh = true;
 // utility functions
 std::string get_proj_dir_path()
 {
-    std::string main_path = __FILE__;
-
-    size_t found = main_path.find_last_of("/\\");
-    if (found != std::string::npos)
-    {
-        proj_dir_path = main_path.substr(0, found);
-    }
+    std::filesystem::path p(__FILE__);
+    std::filesystem::path prj_path = p.parent_path().parent_path();
+    proj_dir_path = prj_path.string();
 
     std::cout << "Project directory path: " << proj_dir_path << std::endl;
     return proj_dir_path;

@@ -65,10 +65,11 @@ Eigen::MatrixXi tri_vis;
 std::string proj_dir_path;
 unsigned num_particles = 0;
 unsigned frame_num = 0;
-unsigned end_frame = 1000;
+unsigned end_frame = 10;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 StopWatchInterface *timer_global = NULL;
+static bool global_timer_pre_get = sdkCreateTimer(&timer_global);
 bool output_mesh = true;
 
 // utility functions
@@ -96,11 +97,11 @@ __global__ void parallel_for(int n, Func func)
     }
 }
 
-// Usage:
-//  Timer t;
-//  t.start();
-//  //do something
-//  t.end();
+
+/// @brief Usage: Timer t("timer_name");
+///               t.start();
+///               //do something
+///               t.end();
 class Timer
 {
 private:
@@ -128,6 +129,11 @@ public:
 };
 Timer t_sim("sim"), t_main("main"), t_substep("substep");
 
+
+/// @brief Usage: SdkTimer t("timer_name");
+///               t.start();
+///               //do something
+///               t.end();
 class SdkTimer
 {
 private:
@@ -135,24 +141,24 @@ private:
 
 public:
     std::string name="";
-    Timer(std::string name="") : name(name) 
+    SdkTimer(std::string name_="") : name(name_)
     {
         sdkCreateTimer(&m_timer);
-    };
+    }
+    SdkTimer::~SdkTimer()
+    {
+        sdkDeleteTimer(&m_timer);
+    }
+
     inline void start()
     {
         sdkStartTimer(&m_timer);
-    };
-
-    ~Timer()
-    {
-        sdkDeleteTimer(&m_timer);
     }
 
     inline void end()
     {
         sdkStopTimer(&m_timer);
-        printf("%s time elapsed: %.4f(s)\n", name.c_str(), sdkGetTimerValue(&m_timer));
+        printf("%s time elapsed: %.4f(ms)\n", name.c_str(), sdkGetTimerValue(&m_timer));
         sdkResetTimer(&m_timer);
     };
 
@@ -354,12 +360,15 @@ void substep_xpbd(int max_iter)
 
 void main_loop()
 {
+    SdkTimer t_substep1("substep sdk");
     for (frame_num = 0; frame_num <= end_frame; frame_num++)
     {
         printf("---------\n");
         printf("frame_num = %d\n", frame_num);
         tic();
+        t_substep1.start();
         substep_xpbd(max_iter);
+        t_substep1.end();
         toc("substep_xpbd");
 
         if (output_mesh)
@@ -474,6 +483,8 @@ void run_simulation()
 
     t_sim.start();
 
+    SdkTimer t_init("init");
+    t_init.start();
     resize_fields();
 
     init_pos();
@@ -482,21 +493,15 @@ void run_simulation()
 
     load_R_P();
 
+    t_init.end();
+
     main_loop();
     
-    t_sim.end("sim");
+    t_sim.end();
 }
 
 int main(int argc, char *argv[])
 {
-    // // global timer
-    // sdkCreateTimer(&timer_global);
-
-    // // create and start timer_main
-    // StopWatchInterface *timer_main = NULL;
-    // sdkCreateTimer(&timer_main);
-    // sdkStartTimer(&timer_main); // start the timer_main
-
     t_main.start();
 
     // Load a mesh
@@ -518,12 +523,4 @@ int main(int argc, char *argv[])
     // igl::writeOBJ(proj_dir_path + "/data/models/bunny2.obj", pos_vis, tri);
 
     t_main.end();
-
-    // // stop and destroy timer_main
-    // sdkStopTimer(&timer_main);
-    // printf("%s time: %f (ms)\n", __func__, sdkGetTimerValue(&timer_main));
-    // sdkDeleteTimer(&timer_main);
-
-    // // del global timer
-    // sdkDeleteTimer(&timer_global);
 }

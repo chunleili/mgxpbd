@@ -18,8 +18,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra>
-#include "igl/readOBJ.h"
-#include "igl/writeOBJ.h"
+#include <igl/readOBJ.h>
+#include <igl/writeOBJ.h>
 
 using namespace std;
 

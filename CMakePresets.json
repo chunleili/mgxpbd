@@ -1,0 +1,27 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "vs2022",
+            "description": "Default",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "build",
+            "toolchainFile": "C:/Dev/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "vs2022-Rel",
+            "description": "VS 2022 Release",
+            "configurePreset": "vs2022",
+            "configuration": "Release"
+        },
+        {
+            "name": "vs2022-Debug",
+            "description": "VS 2022 Debug",
+            "configurePreset": "vs2022",
+            "configuration": "Debug"
+        }
+    ]
+}

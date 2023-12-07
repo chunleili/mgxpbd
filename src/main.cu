@@ -82,8 +82,17 @@ std::string get_proj_dir_path()
 // this code run before main, in case of user forget to call get_proj_dir_path()
 static string proj_dir_path_pre_get = get_proj_dir_path();
 
-// learn from https://github.com/parallel101/course/blob/2d30da61b442008c003f69225e6feca20a4ca7df/08/06_thrust/01/main.cu
-template <class Func>
+/** @brief A parallel for loop. It should be used with a lambda function.
+ * Learn from https://github.com/parallel101/course/blob/2d30da61b442008c003f69225e6feca20a4ca7df/08/06_thrust/01/main.cu
+ * Usage:
+ * // add one to each vertex
+ * parallel_for<<<num_particles / 512, 128>>>(num_particles, [pos = pos.data()] __device__ (int i) {
+ *    pos[i].y += 1.0;
+ * });
+ * checkCudaErrors(cudaDeviceSynchronize());
+ *
+ */
+template <typename Func>
 __global__ void parallel_for(int n, Func func)
 {
     for (int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -110,7 +119,7 @@ public:
     {
         m_start = std::chrono::steady_clock::now();
     };
-    inline void end(string msg="")
+    inline void end(string msg = "")
     {
         m_end = std::chrono::steady_clock::now();
         std::chrono::duration<double, std::milli> elapsed = m_end - m_start;
@@ -351,7 +360,7 @@ void main_loop()
     {
         printf("---------\n");
         printf("frame_num = %d\n", frame_num);
-        
+
         t_substep.start();
         substep_xpbd(max_iter);
         t_substep.end();
@@ -464,7 +473,7 @@ void run_simulation()
     printf("run_simulation\n");
 
     t_sim.start();
-    
+
     t_init.start();
     resize_fields();
     init_pos();
@@ -482,19 +491,12 @@ int main(int argc, char *argv[])
 {
     t_main.start();
 
-    // Load a mesh
     // igl::readOBJ(proj_dir_path + "/data/models/cloth.obj", pos_vis, tri);
     // num_particles = pos_vis.rows();
     num_particles = NV;
     printf("num_particles = %d\n", num_particles);
 
     run_simulation();
-
-    // // add one to each vertex
-    // parallel_for<<<num_particles / 512, 128>>>(num_particles, [pos = pos.data()] __device__ (int i) {
-    //     pos[i].y += 1.0;
-    // });
-    // checkCudaErrors(cudaDeviceSynchronize());
 
     copy_pos_to_pos_vis();
 

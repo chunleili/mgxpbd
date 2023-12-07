@@ -114,24 +114,53 @@ public:
     {
         m_start = std::chrono::steady_clock::now();
     };
-    inline void end(string message = "")
+    inline void end()
     {
         m_end = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed_seconds = m_end - m_start;
-        printf("%s(%s) elapsed: %.4f(s)\n", message.c_str(), name.c_str(), elapsed_seconds.count());
+        printf("%s time elapsed: %.4f(s)\n",  name.c_str(), elapsed_seconds.count());
     };
     inline void reset()
     {
         m_start = std::chrono::steady_clock::now();
         m_end = std::chrono::steady_clock::now();
     };
-    const auto get_time() const
-    {
-        return std::chrono::steady_clock::now();
-    };
 };
 Timer t_sim("sim"), t_main("main"), t_substep("substep");
 
+class SdkTimer
+{
+private:
+    StopWatchInterface *m_timer = NULL;
+
+public:
+    std::string name="";
+    Timer(std::string name="") : name(name) 
+    {
+        sdkCreateTimer(&m_timer);
+    };
+    inline void start()
+    {
+        sdkStartTimer(&m_timer);
+    };
+
+    ~Timer()
+    {
+        sdkDeleteTimer(&m_timer);
+    }
+
+    inline void end()
+    {
+        sdkStopTimer(&m_timer);
+        printf("%s time elapsed: %.4f(s)\n", name.c_str(), sdkGetTimerValue(&m_timer));
+        sdkResetTimer(&m_timer);
+    };
+
+    inline void reset()
+    {
+        sdkResetTimer(&m_timer);
+    };
+};
 
 inline void tic()
 {
@@ -460,13 +489,13 @@ void run_simulation()
 
 int main(int argc, char *argv[])
 {
-    // global timer
-    sdkCreateTimer(&timer_global);
+    // // global timer
+    // sdkCreateTimer(&timer_global);
 
-    // create and start timer_main
-    StopWatchInterface *timer_main = NULL;
-    sdkCreateTimer(&timer_main);
-    sdkStartTimer(&timer_main); // start the timer_main
+    // // create and start timer_main
+    // StopWatchInterface *timer_main = NULL;
+    // sdkCreateTimer(&timer_main);
+    // sdkStartTimer(&timer_main); // start the timer_main
 
     t_main.start();
 
@@ -490,11 +519,11 @@ int main(int argc, char *argv[])
 
     t_main.end();
 
-    // stop and destroy timer_main
-    sdkStopTimer(&timer_main);
-    printf("%s time: %f (ms)\n", __func__, sdkGetTimerValue(&timer_main));
-    sdkDeleteTimer(&timer_main);
+    // // stop and destroy timer_main
+    // sdkStopTimer(&timer_main);
+    // printf("%s time: %f (ms)\n", __func__, sdkGetTimerValue(&timer_main));
+    // sdkDeleteTimer(&timer_main);
 
-    // del global timer
-    sdkDeleteTimer(&timer_global);
+    // // del global timer
+    // sdkDeleteTimer(&timer_global);
 }

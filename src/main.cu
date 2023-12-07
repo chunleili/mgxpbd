@@ -67,8 +67,6 @@ unsigned frame_num = 0;
 unsigned end_frame = 10;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
-StopWatchInterface *timer_global = NULL;
-static bool global_timer_pre_get = sdkCreateTimer(&timer_global);
 bool output_mesh = true;
 
 // utility functions
@@ -112,11 +110,11 @@ public:
     {
         m_start = std::chrono::steady_clock::now();
     };
-    inline void end()
+    inline void end(string msg="")
     {
         m_end = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed_seconds = m_end - m_start;
-        printf("%s time elapsed: %.4f(s)\n", name.c_str(), elapsed_seconds.count());
+        std::chrono::duration<double, std::milli> elapsed = m_end - m_start;
+        printf("%s(%s timer): %.0f(ms)\n", msg.c_str(), name.c_str(), elapsed.count());
     };
     inline void reset()
     {
@@ -124,7 +122,8 @@ public:
         m_end = std::chrono::steady_clock::now();
     };
 };
-Timer t_sim("sim"), t_main("main"), t_substep("substep");
+Timer global_timer("global");
+Timer t_sim("sim"), t_main("main"), t_substep("substep"), t_init("init");
 
 /// @brief Usage: SdkTimer t("timer_name");
 ///               t.start();
@@ -164,17 +163,17 @@ public:
     };
 };
 
+// caution: the tic toc cannot be nested
 inline void tic()
 {
-    sdkResetTimer(&timer_global);
-    sdkStartTimer(&timer_global); // start the timer_global
+    global_timer.reset();
+    global_timer.start();
 }
 
 inline void toc(string message = "")
 {
-    sdkStopTimer(&timer_global);
-    printf("%s(timer_global): %f (ms)\n", message.c_str(), sdkGetTimerValue(&timer_global));
-    sdkResetTimer(&timer_global);
+    global_timer.end(message);
+    global_timer.reset();
 }
 
 void copy_pos_to_pos_vis()
@@ -348,16 +347,14 @@ void substep_xpbd(int max_iter)
 
 void main_loop()
 {
-    SdkTimer t_substep1("substep sdk");
     for (frame_num = 0; frame_num <= end_frame; frame_num++)
     {
         printf("---------\n");
         printf("frame_num = %d\n", frame_num);
-        tic();
-        t_substep1.start();
+        
+        t_substep.start();
         substep_xpbd(max_iter);
-        t_substep1.end();
-        toc("substep_xpbd");
+        t_substep.end();
 
         if (output_mesh)
         {
@@ -467,17 +464,13 @@ void run_simulation()
     printf("run_simulation\n");
 
     t_sim.start();
-
-    SdkTimer t_init("init");
+    
     t_init.start();
     resize_fields();
-
     init_pos();
     init_edge();
     init_tri();
-
     load_R_P();
-
     t_init.end();
 
     main_loop();

@@ -1,46 +1,41 @@
 # multigrid xpbd
 
-## 编译
-只试验了一种环境: VS2022 Widows 10
+## Build
+System: Windows 10
 
-## 闲话
-可视化依赖于libigl, 可以去extern/libigl/tutorials查看用法。
+Requirements: 
+- CMake >=3.24
+- visual studio 2022
+- vcpkg
+
+Build steps:
+1. Change the vcpkg path in CMakePresets.json to your own path.
+   ```
+   "toolchainFile": "C:/Dev/vcpkg/scripts/buildsystems/vcpkg.cmake"
+   ```
+2. Config
+    ```
+    cmake --preset=vs2022
+    ```
+    The dependencies will be installed automatically as listed in vcpkg.json. They are installed in `.\build\vcpkg_installed\x64-windows`.
+
+3. Build
+    ```
+    cmake --build --preset=vs2022-Rel
+    ```
+
+## Run
+```
+./build/Release/main_cu.exe
+```
+
+Output files locate in results folder.
+
+
+## Extra
 
 为了保持代码风格与libigl一致，一律使用小写下划线命名变量、函数、文件夹名和文件名，用大驼峰命名类。
 
 较大模型github无法上传, 请放在large_models下面，不要污染了git仓库。
 
 proj_dir_path 是全局变量，获取到的是项目的根目录，它依赖于main.cpp的位置，因此不要随意移动main.cpp的位置。
-
-增加新的cpp文件放在src下面，然后在CMakeLists.txt中添加即可。例如要增加another.cpp
-```cmake
-add_executable(main main.cpp src/another.cpp)
-```
-
-增加libigl的一些第三方库，可以酌情注释掉下面的行。
-```cmake
-target_link_libraries(main PUBLIC 
-  igl::glfw
-  ## Other modules you could link to
-  # igl::embree
-  igl::imgui
-  igl::opengl
-  # igl::stb
-  # igl::predicates
-  # igl::xml
-  # igl_copyleft::cgal
-  # igl_copyleft::comiso
-  # igl_copyleft::core
-  # igl_copyleft::cork
-  # igl_copyleft::tetgen
-  # igl_restricted::matlab
-  # igl_restricted::mosek
-  # igl_restricted::triangle
-  )
-```
-
-
-下面这段代码中，pos必须是MatrixXd类型
-```
-viewer.data().set_mesh(pos, tri);
-```

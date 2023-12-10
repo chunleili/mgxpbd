@@ -7,6 +7,7 @@
 #include <cmath>
 #include <chrono>
 #include <filesystem>
+#include <vector>
 
 #include <cuda_runtime.h>
 #include <thrust/universal_vector.h>
@@ -29,18 +30,18 @@ const int N = 256;
 const int NV = (N + 1) * (N + 1);
 const int NT = 2 * N * N;
 const int NE = 2 * N * (N + 1) + N * N;
-const float h = 0.01;
+const double h = 0.01;
 const int M = NE;
 const int new_M = int(NE / 100);
-const float compliance = 1.0e-8;
-const float alpha = compliance * (1.0 / h / h);
+const double compliance = 1.0e-8;
+const double alpha = compliance * (1.0 / h / h);
 
 // typedefs
-using Field1f = thrust::universal_vector<float>;
-using Field3f = thrust::universal_vector<float3>;
-using Field3i = thrust::universal_vector<int3>;
-using Field2i = thrust::universal_vector<int2>;
-using Field1i = thrust::universal_vector<int>;
+using Field1f = vector<float>;
+using Field3f = vector<float3>;
+using Field3i = vector<int3>;
+using Field2i = vector<int2>;
+using Field1i = vector<int>;
 
 // global fields
 Field3f pos;
@@ -64,7 +65,7 @@ Eigen::MatrixXi tri_vis;
 std::string proj_dir_path;
 unsigned num_particles = 0;
 unsigned frame_num = 0;
-unsigned end_frame = 10;
+unsigned end_frame = 1000;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
@@ -119,12 +120,20 @@ public:
     {
         m_start = std::chrono::steady_clock::now();
     };
-    inline void end(string msg = "")
+    inline void end(string msg = "", string unit="ms")
     {
         m_end = std::chrono::steady_clock::now();
-        std::chrono::duration<double, std::milli> elapsed = m_end - m_start;
-        printf("%s(%s timer): %.0f(ms)\n", msg.c_str(), name.c_str(), elapsed.count());
-    };
+        if(unit == "ms")
+        {
+            std::chrono::duration<double, std::milli> elapsed = m_end - m_start;
+            printf("%s(%s timer): %.0f(ms)\n", msg.c_str(), name.c_str(), elapsed.count());
+        }
+        else if(unit == "s")
+        {
+            std::chrono::duration<double> elapsed = m_end - m_start;
+            printf("%s(%s timer): %.0f(s)\n", msg.c_str(), name.c_str(), elapsed.count());
+        }
+    }
     inline void reset()
     {
         m_start = std::chrono::steady_clock::now();
@@ -296,13 +305,15 @@ void solve_constraints_xpbd()
         float constraint = length(dis) - rest_len[i];
         float3 gradient = normalize(dis);
         float l = -constraint / (invM0 + invM1);
+        float delta_lagrangian = -(constraint + lagrangian[i] * alpha) / (invM0 + invM1 + alpha);
+        lagrangian[i] += delta_lagrangian;
         if (invM0 != 0.0)
         {
-            acc_pos[idx0] += invM0 * l * gradient;
+            acc_pos[idx0] += invM0 * delta_lagrangian * gradient;
         }
         if (invM1 != 0.0)
         {
-            acc_pos[idx1] -= invM1 * l * gradient;
+            acc_pos[idx1] -= invM1 * delta_lagrangian * gradient;
         }
     }
 }
@@ -502,5 +513,5 @@ int main(int argc, char *argv[])
 
     // igl::writeOBJ(proj_dir_path + "/data/models/bunny2.obj", pos_vis, tri);
 
-    t_main.end();
+    t_main.end("","s");
 }

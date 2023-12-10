@@ -22,6 +22,7 @@
 #include <unsupported/Eigen/SparseExtra>
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
+#include <glm/glm.hpp>
 
 using namespace std;
 
@@ -35,6 +36,7 @@ const int M = NE;
 const int new_M = int(NE / 100);
 const double compliance = 1.0e-8;
 const double alpha = compliance * (1.0 / h / h);
+const float omega = 0.1; //under-relaxing factor
 
 // control variables
 std::string proj_dir_path;
@@ -46,10 +48,13 @@ std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
 
 // typedefs
+using Vec3f = glm::vec3;
+using Vec2i = glm::ivec2;
+using Vec3i = glm::ivec3;
 using Field1f = vector<float>;
-using Field3f = vector<float3>;
-using Field3i = vector<int3>;
-using Field2i = vector<int2>;
+using Field3f = vector<Vec3f>;
+using Field3i = vector<Vec3i>;
+using Field2i = vector<Vec2i>;
 using Field1i = vector<int>;
 
 // global fields
@@ -72,6 +77,16 @@ Eigen::MatrixXi tri_vis;
 
 
 // utility functions
+__forceinline Vec3f length(Vec3f vec)
+{
+    return glm::length(vec);
+}
+
+__forceinline Vec3f normalize(Vec3f vec)
+{
+    return glm::normalize(vec);
+}
+
 std::string get_proj_dir_path()
 {
     std::filesystem::path p(__FILE__);
@@ -200,9 +215,9 @@ void copy_pos_to_pos_vis()
     // copy pos to pos_vis
     for (int i = 0; i < num_particles; i++)
     {
-        pos_vis(i, 0) = pos[i].x;
-        pos_vis(i, 1) = pos[i].y;
-        pos_vis(i, 2) = pos[i].z;
+        pos_vis(i, 0) = pos[i][0];
+        pos_vis(i, 1) = pos[i][1];
+        pos_vis(i, 2) = pos[i][2];
     }
 }
 
@@ -217,8 +232,8 @@ void init_edge()
         {
             int edge_idx = i * N + j;
             int pos_idx = i * (N + 1) + j;
-            edge[edge_idx].x = pos_idx;
-            edge[edge_idx].y = pos_idx + 1;
+            edge[edge_idx][0] = pos_idx;
+            edge[edge_idx][1] = pos_idx + 1;
         }
     }
 
@@ -229,8 +244,8 @@ void init_edge()
         {
             int edge_idx = start + j * N + i;
             int pos_idx = i * (N + 1) + j;
-            edge[edge_idx].x = pos_idx;
-            edge[edge_idx].y = pos_idx + N + 1;
+            edge[edge_idx][0] = pos_idx;
+            edge[edge_idx][1] = pos_idx + N + 1;
         }
     }
 
@@ -243,30 +258,30 @@ void init_edge()
             int pos_idx = i * (N + 1) + j;
             if ((i + j) % 2 == 0)
             {
-                edge[edge_idx].x = pos_idx;
-                edge[edge_idx].y = pos_idx + N + 2;
+                edge[edge_idx][0] = pos_idx;
+                edge[edge_idx][1] = pos_idx + N + 2;
             }
             else
             {
-                edge[edge_idx].x = pos_idx + 1;
-                edge[edge_idx].y = pos_idx + N + 1;
+                edge[edge_idx][0] = pos_idx + 1;
+                edge[edge_idx][1] = pos_idx + N + 1;
             }
         }
     }
 
     for (int i = 0; i < NE; i++)
     {
-        int idx1 = edge[i].x;
-        int idx2 = edge[i].y;
-        float3 p1 = pos[idx1];
-        float3 p2 = pos[idx2];
+        int idx1 = edge[i][0];
+        int idx2 = edge[i][1];
+        Vec3f p1 = pos[idx1];
+        Vec3f p2 = pos[idx2];
         rest_len[i] = length(p1 - p2);
     }
 }
 
 void semi_euler()
 {
-    float3 gravity = make_float3(0.0, -0.1, 0.0);
+    Vec3f gravity = Vec3f(0.0, -0.1, 0.0);
     for (int i = 0; i < num_particles; i++)
     {
         if (inv_mass[i] != 0.0)
@@ -290,7 +305,7 @@ void reset_accpos()
 {
     for (int i = 0; i < num_particles; i++)
     {
-        acc_pos[i] = make_float3(0.0, 0.0, 0.0);
+        acc_pos[i] = Vec3f(0.0, 0.0, 0.0);
     }
 }
 
@@ -298,13 +313,13 @@ void solve_constraints_xpbd()
 {
     for (int i = 0; i < NE; i++)
     {
-        int idx0 = edge[i].x;
-        int idx1 = edge[i].y;
+        int idx0 = edge[i][0];
+        int idx1 = edge[i][1];
         float invM0 = inv_mass[idx0];
         float invM1 = inv_mass[idx1];
-        float3 dis = pos[idx0] - pos[idx1];
+        Vec3f dis = pos[idx0] - pos[idx1];
         float constraint = length(dis) - rest_len[i];
-        float3 gradient = normalize(dis);
+        Vec3f gradient = normalize(dis);
         float l = -constraint / (invM0 + invM1);
         float delta_lagrangian = -(constraint + lagrangian[i] * alpha) / (invM0 + invM1 + alpha);
         lagrangian[i] += delta_lagrangian;
@@ -325,7 +340,7 @@ void update_pos()
     {
         if (inv_mass[i] != 0.0)
         {
-            pos[i] += 0.5 * acc_pos[i];
+            pos[i] += omega * acc_pos[i];
         }
     }
 }
@@ -432,7 +447,7 @@ void init_pos()
         {
             int idx = i * (N + 1) + j;
             // pos[idx] = ti.Vector([i / N,  j / N, 0.5])  # vertical hang
-            pos[idx] = make_float3(i / float(N), 0.5, j / float(N)); // horizontal hang
+            pos[idx] = Vec3f(i / float(N), 0.5, j / float(N)); // horizontal hang
             inv_mass[idx] = 1.0;
         }
     }

@@ -4,6 +4,7 @@
     "description": "multigrid xpbd",
     "dependencies": [
         "libigl",
-        "eigen3"
+        "eigen3",
+        "glm"
     ]
 }

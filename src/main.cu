@@ -36,6 +36,15 @@ const int new_M = int(NE / 100);
 const double compliance = 1.0e-8;
 const double alpha = compliance * (1.0 / h / h);
 
+// control variables
+std::string proj_dir_path;
+unsigned num_particles = 0;
+unsigned frame_num = 0;
+unsigned end_frame = 1000;
+unsigned max_iter = 50;
+std::string out_dir = "./result/cloth3d_256_50_amg/";
+bool output_mesh = true;
+
 // typedefs
 using Field1f = vector<float>;
 using Field3f = vector<float3>;
@@ -61,14 +70,6 @@ Field3f old_pos;
 Eigen::MatrixXd pos_vis;
 Eigen::MatrixXi tri_vis;
 
-// contorl variables
-std::string proj_dir_path;
-unsigned num_particles = 0;
-unsigned frame_num = 0;
-unsigned end_frame = 1000;
-unsigned max_iter = 50;
-std::string out_dir = "./result/cloth3d_256_50_amg/";
-bool output_mesh = true;
 
 // utility functions
 std::string get_proj_dir_path()

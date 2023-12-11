@@ -31,7 +31,7 @@ const int N = 256;
 const int NV = (N + 1) * (N + 1);
 const int NT = 2 * N * N;
 const int NE = 2 * N * (N + 1) + N * N;
-const double h = 0.01;
+const float h = 0.01;
 const int M = NE;
 const int new_M = int(NE / 100);
 const double compliance = 1.0e-8;
@@ -77,12 +77,12 @@ Eigen::MatrixXi tri_vis;
 
 
 // utility functions
-__forceinline Vec3f length(Vec3f vec)
+__forceinline float length(Vec3f& vec)
 {
     return glm::length(vec);
 }
 
-__forceinline Vec3f normalize(Vec3f vec)
+__forceinline Vec3f normalize(Vec3f& vec)
 {
     return glm::normalize(vec);
 }

@@ -8,6 +8,7 @@
 #include <chrono>
 #include <filesystem>
 #include <vector>
+#include <array>
 
 #include <cuda_runtime.h>
 #include <thrust/universal_vector.h>
@@ -56,6 +57,7 @@ using Field3f = vector<Vec3f>;
 using Field3i = vector<Vec3i>;
 using Field2i = vector<Vec2i>;
 using Field1i = vector<int>;
+using Field23f = vector<array<Vec3f,2>>;
 
 // global fields
 Field3f pos;
@@ -70,6 +72,7 @@ Field1f dLambda;
 Field3f pos_mid;
 Field3f acc_pos;
 Field3f old_pos;
+Field23f gradC;
 
 // we have to use pos_vis for visualization because libigl uses Eigen::MatrixXd
 Eigen::MatrixXd pos_vis;
@@ -78,6 +81,8 @@ Eigen::MatrixXi tri_vis;
 Eigen::SparseMatrix<float> R, P;
 Eigen::SparseMatrix<float> M_inv(3 * NV, 3 * NV);
 Eigen::SparseMatrix<float> ALPHA(M,M);
+Eigen::SparseMatrix<float> A(M, M);
+Eigen::SparseMatrix<float> G(M, 3*N);
 
 // utility functions
 __forceinline float length(Vec3f& vec)
@@ -411,11 +416,73 @@ void fill_ALPHA()
     ALPHA.setFromTriplets(alpha_.begin(), alpha_.end());
 }
 
+void compute_C_and_gradC()
+{
+    for(int i=0; i < NE; i++)
+    {
+        int idx0 = edge[i][0];
+        int idx1 = edge[i][1];
+        Vec3f dis = pos[idx0] - pos[idx1];
+        constraints[i] = length(dis) - rest_len[i];
+        Vec3f g = normalize(dis);
+
+        gradC[i][0] = g;
+        gradC[i][1] = -g;
+    }
+}
+
+// @ti.kernel
+// def fill_gradC_triplets_kernel(
+//     ii:ti.types.ndarray(dtype=ti.i32),
+//     jj:ti.types.ndarray(dtype=ti.i32),
+//     vv:ti.types.ndarray(dtype=ti.i32),
+//     gradC: ti.template(),
+//     edge: ti.template(),
+// ):
+//     cnt=0
+//     ti.loop_config(serialize=True)
+//     for j in range(edge.shape[0]):
+//         ind = edge[j]
+//         for p in range(2):
+//             for d in range(3):
+//                 pid = ind[p]
+//                 ii[cnt],jj[cnt],vv[cnt] = j, 3 * pid + d, gradC[j, p][d]
+//                 cnt+=1
+
+void fill_gradC_triplets()
+{
+    typedef Eigen::Triplet<float> T;
+
+    std::vector<T> gradC_triplets(6*NE);
+    int cnt = 0;
+    for(int j=0; j < NE; j++)
+    {
+        for(int p=0; p < 2; p++)
+        {
+            for(int d=0; d < 3; d++)
+            {
+                int pid = edge[j][p];
+                gradC_triplets[cnt] = T(j, 3*pid+d, gradC[j][p][d]);
+                cnt++;
+            }
+        }
+    }
+    G.setFromTriplets(gradC_triplets.begin(), gradC_triplets.end());
+}
+
+
 void substep_all_solver()
 {
     semi_euler();
     reset_lagrangian();
-
+    for (int i = 0; i <= max_iter; i++)
+    {
+        compute_C_and_gradC();
+        // fill_gradC_triplets();
+        // assemble A and b
+        // A = G * M_inv * G.transpose() + ALPHA;
+    }
+    update_vel();
 }
 
 
@@ -471,6 +538,7 @@ void resize_fields()
     acc_pos.resize(num_particles);
     old_pos.resize(num_particles);
     tri.resize(3 * NT);
+    gradC.resize(NE);
 
     tri_vis.resize(NT, 3);
     pos_vis.resize(num_particles, 3);

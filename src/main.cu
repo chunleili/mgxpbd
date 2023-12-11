@@ -36,7 +36,7 @@ const int M = NE;
 const int new_M = int(NE / 100);
 const double compliance = 1.0e-8;
 const double alpha = compliance * (1.0 / h / h);
-const float omega = 0.1; //under-relaxing factor
+const float omega = 0.5; //under-relaxing factor
 
 // control variables
 std::string proj_dir_path;
@@ -75,6 +75,9 @@ Field3f old_pos;
 Eigen::MatrixXd pos_vis;
 Eigen::MatrixXi tri_vis;
 
+Eigen::SparseMatrix<float> R, P;
+Eigen::SparseMatrix<float> M_inv(3 * NV, 3 * NV);
+Eigen::SparseMatrix<float> ALPHA(M,M);
 
 // utility functions
 __forceinline float length(Vec3f& vec)
@@ -367,12 +370,13 @@ void update_vel()
     }
 }
 
-void substep_xpbd(int max_iter)
+void substep_xpbd()
 {
     semi_euler();
     reset_lagrangian();
     for (int i = 0; i <= max_iter; i++)
     {
+        // printf("iter = %d\n", i);
         reset_accpos();
         solve_constraints_xpbd();
         update_pos();
@@ -380,6 +384,40 @@ void substep_xpbd(int max_iter)
     }
     update_vel();
 }
+
+
+
+void fill_M_inv()
+{
+    typedef Eigen::Triplet<float> T;
+
+    std::vector<T> inv_mass_3(3*NV);
+    for(int i=0; i < 3*NV; i++)
+    {
+        inv_mass_3[i] = T(i, i, inv_mass[int(i/3)]);
+    }
+    M_inv.setFromTriplets(inv_mass_3.begin(), inv_mass_3.end());
+}
+
+void fill_ALPHA()
+{
+    typedef Eigen::Triplet<float> T;
+
+    std::vector<T> alpha_(NE);
+    for(int i=0; i < NE; i++)
+    {
+        alpha_[i] = T(i, i, alpha);
+    }
+    ALPHA.setFromTriplets(alpha_.begin(), alpha_.end());
+}
+
+void substep_all_solver()
+{
+    semi_euler();
+    reset_lagrangian();
+
+}
+
 
 void main_loop()
 {
@@ -389,7 +427,8 @@ void main_loop()
         printf("frame_num = %d\n", frame_num);
 
         t_substep.start();
-        substep_xpbd(max_iter);
+        // substep_xpbd();
+        substep_all_solver();
         t_substep.end();
 
         if (output_mesh)
@@ -411,8 +450,6 @@ void main_loop()
 void load_R_P()
 {
     // load R, P
-    Eigen::SparseMatrix<double> R, P;
-
     Eigen::loadMarket(R, proj_dir_path + "/data/misc/R.mtx");
     Eigen::loadMarket(P, proj_dir_path + "/data/misc/P.mtx");
 
@@ -495,6 +532,14 @@ void init_tri()
     }
 }
 
+void test()
+{
+    Eigen::saveMarket(M_inv, "M.mtx");
+    Eigen::saveMarket(ALPHA, "ALPHA.mtx");
+    Eigen::saveMarket(R, "RR.mtx");
+    Eigen::saveMarket(P, "PP.mtx");
+}
+
 void run_simulation()
 {
     printf("run_simulation\n");
@@ -507,6 +552,9 @@ void run_simulation()
     init_edge();
     init_tri();
     load_R_P();
+    fill_M_inv();
+    fill_ALPHA();
+    // test();
     t_init.end();
 
     main_loop();

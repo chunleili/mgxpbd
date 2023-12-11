@@ -82,7 +82,7 @@ Eigen::SparseMatrix<float> R, P;
 Eigen::SparseMatrix<float> M_inv(3 * NV, 3 * NV);
 Eigen::SparseMatrix<float> ALPHA(M,M);
 Eigen::SparseMatrix<float> A(M, M);
-Eigen::SparseMatrix<float> G(M, 3*N);
+Eigen::SparseMatrix<float> G(M, 3*NV);
 
 // utility functions
 __forceinline float length(Vec3f& vec)
@@ -459,12 +459,13 @@ void fill_gradC_triplets()
     {
         for(int p=0; p < 2; p++)
         {
-            for(int d=0; d < 3; d++)
-            {
-                int pid = edge[j][p];
-                gradC_triplets[cnt] = T(j, 3*pid+d, gradC[j][p][d]);
-                cnt++;
-            }
+            int pid = edge[j][p];
+            gradC_triplets[cnt] = T(j, 3*pid+0, gradC[j][p].x);
+            cnt++;
+            gradC_triplets[cnt] = T(j, 3*pid+1, gradC[j][p].y);
+            cnt++;
+            gradC_triplets[cnt] = T(j, 3*pid+2, gradC[j][p].z);
+            cnt++;
         }
     }
     G.setFromTriplets(gradC_triplets.begin(), gradC_triplets.end());
@@ -478,7 +479,7 @@ void substep_all_solver()
     for (int i = 0; i <= max_iter; i++)
     {
         compute_C_and_gradC();
-        // fill_gradC_triplets();
+        fill_gradC_triplets();
         // assemble A and b
         // A = G * M_inv * G.transpose() + ALPHA;
     }

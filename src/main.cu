@@ -404,6 +404,7 @@ void fill_M_inv()
         inv_mass_3[i] = T(i, i, inv_mass[int(i/3)]);
     }
     M_inv.setFromTriplets(inv_mass_3.begin(), inv_mass_3.end());
+    M_inv.makeCompressed();
 }
 
 void fill_ALPHA()
@@ -416,6 +417,7 @@ void fill_ALPHA()
         alpha_[i] = T(i, i, alpha);
     }
     ALPHA.setFromTriplets(alpha_.begin(), alpha_.end());
+    ALPHA.makeCompressed();
 }
 
 void compute_C_and_gradC()
@@ -433,23 +435,6 @@ void compute_C_and_gradC()
     }
 }
 
-// @ti.kernel
-// def fill_gradC_triplets_kernel(
-//     ii:ti.types.ndarray(dtype=ti.i32),
-//     jj:ti.types.ndarray(dtype=ti.i32),
-//     vv:ti.types.ndarray(dtype=ti.i32),
-//     gradC: ti.template(),
-//     edge: ti.template(),
-// ):
-//     cnt=0
-//     ti.loop_config(serialize=True)
-//     for j in range(edge.shape[0]):
-//         ind = edge[j]
-//         for p in range(2):
-//             for d in range(3):
-//                 pid = ind[p]
-//                 ii[cnt],jj[cnt],vv[cnt] = j, 3 * pid + d, gradC[j, p][d]
-//                 cnt+=1
 
 void fill_gradC_triplets()
 {
@@ -471,7 +456,7 @@ void fill_gradC_triplets()
         }
     }
     G.setFromTriplets(gradC_triplets.begin(), gradC_triplets.end());
-    Eigen::SparseMatrix::makeCompressed(G);
+    G.makeCompressed();
 }
 
 
@@ -520,10 +505,11 @@ void fill_b()
  * with gauss_seidel(Ap, Aj, Ax, x, b, 0, N, 1) where N is the
  * number of rows in matrix A.  Similarly, a backward sweep is
  * implemented with gauss_seidel(Ap, Aj, Ax, x, b, N, -1, -1).
- */
 // from https://github.com/pyamg/pyamg/blob/0431f825d7e6683c208cad20572e92fc0ef230c1/pyamg/amg_core/relaxation.h#L45
+// I=int, T=float, F=float
+*/
 template<class I, class T, class F>
-void amg_core_gauss_seidel(const I Ap[], const int Ap_size,
+void gauss_seidel(const I Ap[], const int Ap_size,
                   const I Aj[], const int Aj_size,
                   const T Ax[], const int Ax_size,
                         T  x[], const int  x_size,
@@ -561,13 +547,18 @@ void substep_all_solver()
         compute_C_and_gradC();
         fill_gradC_triplets();
         // assemble A and b
-        A = G * M_inv * G.transpose() + ALPHA;
+        A = G * M_inv * G.transpose();
+        A = A + ALPHA;
         fill_b();
 
-        //solve Ax=b
+        // //solve Ax=b
         if(solver_type=="GS")
         {
-            amg_core_gauss_seidel(A.indptr, A.indices, A.data, x, b, row_start=0, row_stop=int(len(x0)), row_step=1)
+            int max_GS_iter = 1;
+            for(int GS_iter=0; GS_iter < max_GS_iter; GS_iter++)
+            {
+                gauss_seidel<int, float, float>(A.outerIndexPtr(), A.outerSize(), A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(), dLambda.data(), dLambda.size(), b.data(), b.size(), 0, M, 1);
+            }
         }
     }
     update_vel();

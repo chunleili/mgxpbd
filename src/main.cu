@@ -47,6 +47,7 @@ unsigned end_frame = 1000;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
+string solver_type = "GS";
 
 // typedefs
 using Vec3f = glm::vec3;
@@ -83,6 +84,7 @@ Eigen::SparseMatrix<float> M_inv(3 * NV, 3 * NV);
 Eigen::SparseMatrix<float> ALPHA(M,M);
 Eigen::SparseMatrix<float> A(M, M);
 Eigen::SparseMatrix<float> G(M, 3*NV);
+Eigen::VectorXf b(M);
 
 // utility functions
 __forceinline float length(Vec3f& vec)
@@ -469,8 +471,86 @@ void fill_gradC_triplets()
         }
     }
     G.setFromTriplets(gradC_triplets.begin(), gradC_triplets.end());
+    Eigen::SparseMatrix::makeCompressed(G);
 }
 
+
+void fill_b()
+{
+    for(int i=0; i < NE; i++)
+    {
+        b[i] = -constraints[i] - alpha * lagrangian[i];
+    }
+}
+
+/*
+ * Perform one iteration of Gauss-Seidel relaxation on the linear
+ * system Ax = b, where A is stored in CSR format and x and b
+ * are column vectors.
+ *
+ * Parameters
+ * ----------
+ * Ap : array
+ *     CSR row pointer
+ * Aj : array
+ *     CSR index array
+ * Ax : array
+ *     CSR data array
+ * x : array, inplace
+ *     approximate solution
+ * b : array
+ *     right hand side
+ * row_start : int
+ *     beginning of the sweep
+ * row_stop : int
+ *     end of the sweep (i.e. one past the last unknown)
+ * row_step : int
+ *     stride used during the sweep (may be negative)
+ *
+ * Returns
+ * -------
+ * Nothing, x will be modified inplace
+ *
+ * Notes
+ * -----
+ * The unknowns are swept through according to the slice defined
+ * by row_start, row_end, and row_step.  These options are used
+ * to implement standard forward and backward sweeps, or sweeping
+ * only a subset of the unknowns.  A forward sweep is implemented
+ * with gauss_seidel(Ap, Aj, Ax, x, b, 0, N, 1) where N is the
+ * number of rows in matrix A.  Similarly, a backward sweep is
+ * implemented with gauss_seidel(Ap, Aj, Ax, x, b, N, -1, -1).
+ */
+// from https://github.com/pyamg/pyamg/blob/0431f825d7e6683c208cad20572e92fc0ef230c1/pyamg/amg_core/relaxation.h#L45
+template<class I, class T, class F>
+void amg_core_gauss_seidel(const I Ap[], const int Ap_size,
+                  const I Aj[], const int Aj_size,
+                  const T Ax[], const int Ax_size,
+                        T  x[], const int  x_size,
+                  const T  b[], const int  b_size,
+                  const I row_start,
+                  const I row_stop,
+                  const I row_step)
+{
+    for(I i = row_start; i != row_stop; i += row_step) {
+        I start = Ap[i];
+        I end   = Ap[i+1];
+        T rsum = 0;
+        T diag = 0;
+
+        for(I jj = start; jj < end; jj++){
+            I j = Aj[jj];
+            if (i == j)
+                diag  = Ax[jj];
+            else
+                rsum += Ax[jj]*x[j];
+        }
+
+        if (diag != (F) 0.0){
+            x[i] = (b[i] - rsum)/diag;
+        }
+    }
+}
 
 void substep_all_solver()
 {
@@ -481,7 +561,14 @@ void substep_all_solver()
         compute_C_and_gradC();
         fill_gradC_triplets();
         // assemble A and b
-        // A = G * M_inv * G.transpose() + ALPHA;
+        A = G * M_inv * G.transpose() + ALPHA;
+        fill_b();
+
+        //solve Ax=b
+        if(solver_type=="GS")
+        {
+            amg_core_gauss_seidel(A.indptr, A.indices, A.data, x, b, row_start=0, row_stop=int(len(x0)), row_step=1)
+        }
     }
     update_vel();
 }

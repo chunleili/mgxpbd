@@ -23,7 +23,6 @@
 #include <unsupported/Eigen/SparseExtra>
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
-#include <glm/glm.hpp>
 
 using namespace std;
 
@@ -34,7 +33,7 @@ const int NT = 2 * N * N;
 const int NE = 2 * N * (N + 1) + N * N;
 const float h = 0.01;
 const int M = NE;
-const int new_M = int(NE / 100);
+// const int new_M = int(NE / 100);
 const double compliance = 1.0e-8;
 const double alpha = compliance * (1.0 / h / h);
 const float omega = 0.5; //under-relaxing factor
@@ -50,9 +49,9 @@ bool output_mesh = true;
 string solver_type = "GS";
 
 // typedefs
-using Vec3f = glm::vec3;
-using Vec2i = glm::ivec2;
-using Vec3i = glm::ivec3;
+using Vec3f = Eigen::Vector3f;
+using Vec2i = Eigen::Vector2i;
+using Vec3i = Eigen::Vector3i;
 using Field1f = vector<float>;
 using Field3f = vector<Vec3f>;
 using Field3i = vector<Vec3i>;
@@ -69,7 +68,6 @@ Field3f vel;
 Field1f inv_mass;
 Field1f lagrangian;
 Field1f constraints;
-Field1f dLambda;
 Field3f pos_mid;
 Field3f acc_pos;
 Field3f old_pos;
@@ -85,16 +83,20 @@ Eigen::SparseMatrix<float> ALPHA(M,M);
 Eigen::SparseMatrix<float> A(M, M);
 Eigen::SparseMatrix<float> G(M, 3*NV);
 Eigen::VectorXf b(M);
+Eigen::VectorXf dpos(3*NV);
+Eigen::VectorXf dLambda(M);
 
 // utility functions
-__forceinline float length(Vec3f& vec)
+__forceinline float length(const Vec3f& vec) 
 {
-    return glm::length(vec);
+    // return glm::length(vec);
+    return vec.norm();
 }
 
-__forceinline Vec3f normalize(Vec3f& vec)
+__forceinline Vec3f normalize(const Vec3f& vec) 
 {
-    return glm::normalize(vec);
+    // return glm::normalize(vec);
+    return vec.normalized();
 }
 
 std::string get_proj_dir_path()
@@ -359,9 +361,9 @@ void collision()
 {
     for (int i = 0; i < num_particles; i++)
     {
-        if (pos[i].z < -2.0)
+        if (pos[i][2] < -2.0)
         {
-            pos[i].z = 0.0;
+            pos[i][2] = 0.0;
         }
     }
 }
@@ -447,11 +449,11 @@ void fill_gradC_triplets()
         for(int p=0; p < 2; p++)
         {
             int pid = edge[j][p];
-            gradC_triplets[cnt] = T(j, 3*pid+0, gradC[j][p].x);
+            gradC_triplets[cnt] = T(j, 3*pid+0, gradC[j][p][0]);
             cnt++;
-            gradC_triplets[cnt] = T(j, 3*pid+1, gradC[j][p].y);
+            gradC_triplets[cnt] = T(j, 3*pid+1, gradC[j][p][1]);
             cnt++;
-            gradC_triplets[cnt] = T(j, 3*pid+2, gradC[j][p].z);
+            gradC_triplets[cnt] = T(j, 3*pid+2, gradC[j][p][2]);
             cnt++;
         }
     }
@@ -538,6 +540,23 @@ void gauss_seidel(const I Ap[], const int Ap_size,
     }
 }
 
+// void incre_lagrangian()
+// {
+//     for(int i=0; i < NE; i++)
+//     {
+//         lagrangian[i] += dLambda[i];
+//     }
+// }
+
+// void add_dpos()
+// {
+//     for(int i=0; i < num_particles; i++)
+//     {
+//         pos[i] += dpos.segment<3>(3*i);
+//     }
+
+// }
+
 void substep_all_solver()
 {
     semi_euler();
@@ -551,7 +570,7 @@ void substep_all_solver()
         A = A + ALPHA;
         fill_b();
 
-        // //solve Ax=b
+        //solve Ax=b
         if(solver_type=="GS")
         {
             int max_GS_iter = 1;
@@ -560,6 +579,11 @@ void substep_all_solver()
                 gauss_seidel<int, float, float>(A.outerIndexPtr(), A.outerSize(), A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(), dLambda.data(), dLambda.size(), b.data(), b.size(), 0, M, 1);
             }
         }
+
+        // //transfer back to pos
+        // incre_lagrangian(); 
+        // dpos = M_inv * G.transpose() * dLambda;
+        // add_dpos();
     }
     update_vel();
 }
@@ -573,8 +597,8 @@ void main_loop()
         printf("frame_num = %d\n", frame_num);
 
         t_substep.start();
-        // substep_xpbd();
-        substep_all_solver();
+        substep_xpbd();
+        // substep_all_solver();
         t_substep.end();
 
         if (output_mesh)
@@ -612,7 +636,6 @@ void resize_fields()
     inv_mass.resize(num_particles);
     lagrangian.resize(NE);
     constraints.resize(NE);
-    dLambda.resize(NE);
     pos_mid.resize(num_particles);
     acc_pos.resize(num_particles);
     old_pos.resize(num_particles);

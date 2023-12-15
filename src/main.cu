@@ -25,6 +25,8 @@
 #include <igl/writeOBJ.h>
 
 using namespace std;
+using Eigen::Vector2i;
+using Eigen::Vector3f;
 
 // constants
 const int N = 256;
@@ -442,21 +444,23 @@ void fill_gradC_triplets()
 {
     typedef Eigen::Triplet<float> T;
 
-    std::vector<T> gradC_triplets(6*NE);
+    std::vector<T> gradC_triplets;
+    gradC_triplets.reserve(6*NE);
     int cnt = 0;
     for(int j=0; j < NE; j++)
     {
+        auto ind = edge[j];
         for(int p=0; p < 2; p++)
         {
-            int pid = edge[j][p];
-            gradC_triplets[cnt] = T(j, 3*pid+0, gradC[j][p][0]);
-            cnt++;
-            gradC_triplets[cnt] = T(j, 3*pid+1, gradC[j][p][1]);
-            cnt++;
-            gradC_triplets[cnt] = T(j, 3*pid+2, gradC[j][p][2]);
-            cnt++;
+            for(int d=0; d<3; d++)
+            {
+                int pid = ind[p];
+                gradC_triplets.push_back(T(j, 3*pid+d, gradC[j][p][d]));
+                cnt++;
+            }
         }
     }
+    printf("cnt: %d", cnt);
     G.setFromTriplets(gradC_triplets.begin(), gradC_triplets.end());
     G.makeCompressed();
 }
@@ -466,7 +470,7 @@ void fill_b()
 {
     for(int i=0; i < NE; i++)
     {
-        b[i] = -constraints[i] - alpha * lagrangian[i];
+        b(i) = -constraints[i] - alpha * lagrangian[i];
     }
 }
 
@@ -510,7 +514,7 @@ void fill_b()
 // from https://github.com/pyamg/pyamg/blob/0431f825d7e6683c208cad20572e92fc0ef230c1/pyamg/amg_core/relaxation.h#L45
 // I=int, T=float, F=float
 */
-template<class I, class T, class F>
+template<class I=int, class T=float, class F=float>
 void gauss_seidel(const I Ap[], const int Ap_size,
                   const I Aj[], const int Aj_size,
                   const T Ax[], const int Ax_size,
@@ -523,8 +527,8 @@ void gauss_seidel(const I Ap[], const int Ap_size,
     for(I i = row_start; i != row_stop; i += row_step) {
         I start = Ap[i];
         I end   = Ap[i+1];
-        T rsum = 0;
-        T diag = 0;
+        T rsum = 0.0;
+        T diag = 0.0;
 
         for(I jj = start; jj < end; jj++){
             I j = Aj[jj];
@@ -569,16 +573,22 @@ void substep_all_solver()
         A = G * M_inv * G.transpose();
         A = A + ALPHA;
         fill_b();
+        Eigen::saveMarket(G, "GG.mtx");
+        exit(0);
 
         //solve Ax=b
         if(solver_type=="GS")
         {
             int max_GS_iter = 1;
+            dLambda.setZero();
             for(int GS_iter=0; GS_iter < max_GS_iter; GS_iter++)
             {
                 gauss_seidel<int, float, float>(A.outerIndexPtr(), A.outerSize(), A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(), dLambda.data(), dLambda.size(), b.data(), b.size(), 0, M, 1);
             }
         }
+        std::cout << "last value of dLambda " << dLambda[197119] << std::endl;
+        std::cout << "Max value of dLambda " << dLambda.maxCoeff() << std::endl;
+        std::cout << "Min value of dLambda " << dLambda.minCoeff() << std::endl;
 
         // //transfer back to pos
         // incre_lagrangian(); 
@@ -597,8 +607,8 @@ void main_loop()
         printf("frame_num = %d\n", frame_num);
 
         t_substep.start();
-        substep_xpbd();
-        // substep_all_solver();
+        // substep_xpbd();
+        substep_all_solver();
         t_substep.end();
 
         if (output_mesh)
@@ -629,18 +639,22 @@ void load_R_P()
 
 void resize_fields()
 {
-    pos.resize(num_particles);
-    edge.resize(NE);
-    rest_len.resize(NE);
-    vel.resize(num_particles);
-    inv_mass.resize(num_particles);
-    lagrangian.resize(NE);
-    constraints.resize(NE);
-    pos_mid.resize(num_particles);
-    acc_pos.resize(num_particles);
-    old_pos.resize(num_particles);
-    tri.resize(3 * NT);
-    gradC.resize(NE);
+    pos.resize(num_particles, Vector3f::Zero());
+    edge.resize(NE, Vector2i::Zero());
+    rest_len.resize(NE, 0.0);
+    vel.resize(num_particles, Vector3f::Zero());
+    inv_mass.resize(num_particles, 0.0);
+    lagrangian.resize(NE, 0.0);
+    constraints.resize(NE, 0.0);
+    pos_mid.resize(num_particles, Vector3f::Zero());
+    acc_pos.resize(num_particles, Vector3f::Zero());
+    old_pos.resize(num_particles, Vector3f::Zero());
+    tri.resize(3 * NT, 0);
+    gradC.resize(NE, array<Vec3f, 2>{Vec3f(0.0, 0.0, 0.0), Vec3f(0.0, 0.0, 0.0)});
+
+    dpos.resize(3 * NV, 0.0);
+    dLambda.resize(M, 0.0);
+    b.resize(M, 0.0);
 
     tri_vis.resize(NT, 3);
     pos_vis.resize(num_particles, 3);

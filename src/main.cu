@@ -29,6 +29,7 @@ using namespace std;
 using Eigen::Vector2i;
 using Eigen::Vector3f;
 using Eigen::VectorXf;
+using Eigen::Map;
 
 // constants
 const int N = 256;
@@ -76,7 +77,9 @@ Field3f pos_mid;
 Field3f acc_pos;
 Field3f old_pos;
 Field23f gradC;
-Field1f b;
+Field1f b(M);
+// Field1f dpos(3*NV);
+Field1f dLambda(M);
 
 // we have to use pos_vis for visualization because libigl uses Eigen::MatrixXd
 Eigen::MatrixXd pos_vis;
@@ -87,18 +90,23 @@ Eigen::SparseMatrix<float> M_inv(3 * NV, 3 * NV);
 Eigen::SparseMatrix<float> ALPHA(M,M);
 Eigen::SparseMatrix<float> A(M, M);
 Eigen::SparseMatrix<float> G(M, 3*NV);
-// Eigen::VectorXf b(M);
-Eigen::VectorXf dpos(3*NV);
-Eigen::VectorXf dLambda(M);
+// Eigen::VectorXf dpos(3*NV);
 
 // utility functions
-__forceinline float length(const Vec3f& vec) 
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64)	   
+  #define FORCE_INLINE __forceinline
+#else
+  #define FORCE_INLINE __attribute__((always_inline))
+#endif
+
+
+FORCE_INLINE float length(const Vec3f& vec) 
 {
     // return glm::length(vec);
     return vec.norm();
 }
 
-__forceinline Vec3f normalize(const Vec3f& vec) 
+FORCE_INLINE Vec3f normalize(const Vec3f& vec) 
 {
     // return glm::normalize(vec);
     return vec.normalized();
@@ -265,6 +273,63 @@ void test()
     printf("\nsaving A.mtx\n");
     Eigen::saveMarket(A, "A.mtx");
     Eigen::saveMarket(G, "G.mtx");
+}
+
+float maxField(std::vector<Vec3f>& field)
+{
+    auto max = field[0][0];
+    for (unsigned int i = 1; i < field.size(); i++)
+    {
+        for (unsigned int j = 0; j < 3; j++)
+        {
+            if (field[i][j] > max)
+                max = field[i][j];
+        }
+    }
+    return max;
+}
+
+
+/**
+ * @brief 保存向量场到txt
+ * 
+ * @tparam T 
+ * @param fileName 文件名 
+ * @param content 要打印的场
+ * @param precision 精度（默认小数点后8位数）
+ */
+template<typename T>
+void printVectorField(std::string fileName, T content,  size_t precision=8)
+{
+    std::ofstream f;
+    f.open(fileName);
+    for(const auto& x:content)
+    {
+        for(const auto& xx:x)
+            f<<std::fixed <<std::setprecision(precision)<<xx<<"\t";
+        f<<"\n";
+    } 
+    f.close();
+}
+
+/**
+ * @brief 保存标场到txt
+ * 
+ * @tparam T 
+ * @param fileName 文件名 
+ * @param content 要打印的场
+ * @param precision 精度（默认小数点后8位数）
+ */
+template<typename T>
+void printScalarField(std::string fileName, T content,  size_t precision=8)
+{
+    std::ofstream f;
+    f.open(fileName);
+    for(const auto& x:content)
+    {
+        f<<std::fixed <<std::setprecision(precision)<<x<<"\n";
+    } 
+    f.close();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -576,22 +641,29 @@ void gauss_seidel(const I Ap[], const int Ap_size,
     }
 }
 
-// void incre_lagrangian()
-// {
-//     for(int i=0; i < NE; i++)
-//     {
-//         lagrangian[i] += dLambda[i];
-//     }
-// }
+void incre_lagrangian()
+{
+    for(int i=0; i < NE; i++)
+    {
+        lagrangian[i] += dLambda[i];
+    }
+}
 
-// void add_dpos()
-// {
-//     for(int i=0; i < num_particles; i++)
-//     {
-//         pos[i] += dpos.segment<3>(3*i);
-//     }
+void add_dpos(const Eigen::VectorXf& dpos)
+{
+    for(int i=0; i < num_particles; i++)
+    {
+        pos[i] += dpos.segment(3*i, 3);
+    }
+}
 
-// }
+void copy_dlambda(Eigen::VectorXf &dLambda_eigen, const Field1f &dLambda)
+{
+    for(int i=0; i < NE; i++)
+    {
+        dLambda_eigen[i] = dLambda[i];
+    }
+}
 
 void substep_all_solver()
 {
@@ -608,26 +680,44 @@ void substep_all_solver()
         A.makeCompressed();
         fill_b();
         // savetxt("b.mtx", b);
-        exit(0);
+        // exit(0);
 
         //solve Ax=b
         if(solver_type=="GS")
         {
             int max_GS_iter = 1;
-            dLambda.setZero();
+            dLambda.resize(M, 0.0);
             for(int GS_iter=0; GS_iter < max_GS_iter; GS_iter++)
             {
                 gauss_seidel<int, float, float>(A.outerIndexPtr(), A.outerSize(), A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(), dLambda.data(), dLambda.size(), b.data(), b.size(), 0, M, 1);
             }
         }
-        std::cout << "last value of dLambda " << dLambda[197119] << std::endl;
-        std::cout << "Max value of dLambda " << dLambda.maxCoeff() << std::endl;
-        std::cout << "Min value of dLambda " << dLambda.minCoeff() << std::endl;
 
-        // //transfer back to pos
-        // incre_lagrangian(); 
-        // dpos = M_inv * G.transpose() * dLambda;
-        // add_dpos();
+        auto maxElement = std::max_element(dLambda.begin(), dLambda.end());
+        auto minElement = std::min_element(dLambda.begin(), dLambda.end());
+        std::cout << "\nLast value of dLambda " << dLambda[dLambda.size()-1] << std::endl;
+        std::cout << "Max value of dLambda " << *maxElement << std::endl;
+        std::cout << "Min value of dLambda " << *minElement << std::endl;
+
+        //transfer back to pos
+        incre_lagrangian(); 
+
+        Eigen::Map<Eigen::VectorXf> dLambda_eigen(dLambda.data(), dLambda.size());
+        // VectorXf dLambda_eigen(dLambda.size());
+        // copy_dlambda(dLambda_eigen, dLambda);
+        Eigen::VectorXf dpos_ = M_inv * G.transpose()*dLambda_eigen; 
+        printf("dpos: %f\n", dpos_(0));
+        printf("3*NV: %d\n", 3*NV);
+        printf("M: %d\n", M);
+        printf("dpos size: %d x %d\n", dpos_.rows(), dpos_.cols());
+        auto max_dpos = dpos_.maxCoeff();
+        printf("max dpos: %f\n", max_dpos);
+        auto max_pos = maxField(pos);
+        printf("\npos max: %f\n", max_pos);
+        add_dpos(dpos_);
+        max_pos = maxField(pos);
+        printf("pos max: %f\n", max_pos);
+        exit(0);
     }
     update_vel();
 }
@@ -686,7 +776,7 @@ void resize_fields()
     tri.resize(3 * NT, 0);
     gradC.resize(NE, array<Vec3f, 2>{Vec3f(0.0, 0.0, 0.0), Vec3f(0.0, 0.0, 0.0)});
 
-    dpos.resize(3 * NV, 0.0);
+    // dpos.resize(3 * NV, 0.0);
     dLambda.resize(M, 0.0);
     b.resize(M, 0.0);
 

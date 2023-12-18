@@ -18,6 +18,7 @@
 #include "helper_math.h"
 #include "helper_timer.h"
 
+#include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra>
@@ -27,6 +28,7 @@
 using namespace std;
 using Eigen::Vector2i;
 using Eigen::Vector3f;
+using Eigen::VectorXf;
 
 // constants
 const int N = 256;
@@ -36,8 +38,8 @@ const int NE = 2 * N * (N + 1) + N * N;
 const float h = 0.01;
 const int M = NE;
 // const int new_M = int(NE / 100);
-const double compliance = 1.0e-8;
-const double alpha = compliance * (1.0 / h / h);
+const float compliance = 1.0e-8;
+const float alpha = compliance * (1.0 / h / h);
 const float omega = 0.5; //under-relaxing factor
 
 // control variables
@@ -74,6 +76,7 @@ Field3f pos_mid;
 Field3f acc_pos;
 Field3f old_pos;
 Field23f gradC;
+Field1f b;
 
 // we have to use pos_vis for visualization because libigl uses Eigen::MatrixXd
 Eigen::MatrixXd pos_vis;
@@ -84,7 +87,7 @@ Eigen::SparseMatrix<float> M_inv(3 * NV, 3 * NV);
 Eigen::SparseMatrix<float> ALPHA(M,M);
 Eigen::SparseMatrix<float> A(M, M);
 Eigen::SparseMatrix<float> G(M, 3*NV);
-Eigen::VectorXf b(M);
+// Eigen::VectorXf b(M);
 Eigen::VectorXf dpos(3*NV);
 Eigen::VectorXf dLambda(M);
 
@@ -233,6 +236,35 @@ void copy_pos_to_pos_vis()
         pos_vis(i, 1) = pos[i][1];
         pos_vis(i, 2) = pos[i][2];
     }
+}
+
+// void savetxt(string filename, Field3f &field)
+// {
+//     ofstream myfile;
+//     myfile.open(filename);
+//     for (int i = 0; i < field.size(); i++)
+//     {
+//         myfile << field[i][0] << " " << field[i][1] << " " << field[i][2] << endl;
+//     }
+//     myfile.close();
+// }
+
+void savetxt(string filename, Field1f &field)
+{
+    Eigen::Map<Eigen::VectorXf> v(field.data(), field.size());
+    Eigen::saveMarket(v, filename);
+}
+
+
+void test()
+{
+    Eigen::saveMarket(M_inv, "M.mtx");
+    Eigen::saveMarket(ALPHA, "ALPHA.mtx");
+    Eigen::saveMarket(R, "RR.mtx");
+    Eigen::saveMarket(P, "PP.mtx");
+    printf("\nsaving A.mtx\n");
+    Eigen::saveMarket(A, "A.mtx");
+    Eigen::saveMarket(G, "G.mtx");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -470,7 +502,7 @@ void fill_b()
 {
     for(int i=0; i < NE; i++)
     {
-        b(i) = -constraints[i] - alpha * lagrangian[i];
+        b[i] = -constraints[i] - alpha * lagrangian[i];
     }
 }
 
@@ -569,11 +601,13 @@ void substep_all_solver()
     {
         compute_C_and_gradC();
         fill_gradC_triplets();
+        G.makeCompressed();
         // assemble A and b
         A = G * M_inv * G.transpose();
         A = A + ALPHA;
+        A.makeCompressed();
         fill_b();
-        Eigen::saveMarket(G, "GG.mtx");
+        // savetxt("b.mtx", b);
         exit(0);
 
         //solve Ax=b
@@ -716,13 +750,6 @@ void init_tri()
     }
 }
 
-void test()
-{
-    Eigen::saveMarket(M_inv, "M.mtx");
-    Eigen::saveMarket(ALPHA, "ALPHA.mtx");
-    Eigen::saveMarket(R, "RR.mtx");
-    Eigen::saveMarket(P, "PP.mtx");
-}
 
 void run_simulation()
 {

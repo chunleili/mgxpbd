@@ -651,9 +651,12 @@ void incre_lagrangian()
 
 void add_dpos(const Eigen::VectorXf& dpos)
 {
+    auto dpos3 = dpos.reshaped(NV,3);
+    Vec3f dpos3i=Vec3f(0.0, 0.0, 0.0);
     for(int i=0; i < num_particles; i++)
     {
-        pos[i] += dpos.segment(3*i, 3);
+        dpos3i = dpos3.row(i);
+        pos[i] += dpos3i;
     }
 }
 
@@ -705,19 +708,24 @@ void substep_all_solver()
         Eigen::Map<Eigen::VectorXf> dLambda_eigen(dLambda.data(), dLambda.size());
         // VectorXf dLambda_eigen(dLambda.size());
         // copy_dlambda(dLambda_eigen, dLambda);
-        Eigen::VectorXf dpos_ = M_inv * G.transpose()*dLambda_eigen; 
-        printf("dpos: %f\n", dpos_(0));
-        printf("3*NV: %d\n", 3*NV);
-        printf("M: %d\n", M);
-        printf("dpos size: %d x %d\n", dpos_.rows(), dpos_.cols());
-        auto max_dpos = dpos_.maxCoeff();
-        printf("max dpos: %f\n", max_dpos);
-        auto max_pos = maxField(pos);
-        printf("\npos max: %f\n", max_pos);
+        Eigen::VectorXf dpos_ = M_inv * G.transpose()*dLambda_eigen;
+        
+        printf("smallest dLambda_eigen:\n");
+        cout<<dLambda_eigen.minCoeff()<<endl;
+        printf("biggest dLambda_eigen:\n");
+        cout<<dLambda_eigen.maxCoeff()<<endl;
+
+        printf("smallest dpos_:\n");
+        cout<<dpos_.minCoeff()<<endl;
+        printf("biggest dpos_:\n");
+        cout<<dpos_.maxCoeff()<<endl;
+        
+        printf("pos[0]: %f\n", pos[0]);
+
         add_dpos(dpos_);
-        max_pos = maxField(pos);
-        printf("pos max: %f\n", max_pos);
-        exit(0);
+
+        printf("pos[0]: %f\n", pos[0]);
+
     }
     update_vel();
 }

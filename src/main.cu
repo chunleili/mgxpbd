@@ -182,7 +182,7 @@ public:
     };
 };
 Timer global_timer("global");
-Timer t_sim("sim"), t_main("main"), t_substep("substep"), t_init("init");
+Timer t_sim("sim"), t_main("main"), t_substep("substep"), t_init("init"), t_iter("iter");
 
 /// @brief Usage: SdkTimer t("timer_name");
 ///               t.start();
@@ -557,7 +557,7 @@ void fill_gradC_triplets()
             }
         }
     }
-    printf("cnt: %d", cnt);
+    // printf("cnt: %d", cnt);
     G.setFromTriplets(gradC_triplets.begin(), gradC_triplets.end());
     G.makeCompressed();
 }
@@ -670,10 +670,13 @@ void copy_dlambda(Eigen::VectorXf &dLambda_eigen, const Field1f &dLambda)
 
 void substep_all_solver()
 {
+    printf("\n\n----frame_num:%d----\n", frame_num);
     semi_euler();
     reset_lagrangian();
-    for (int i = 0; i <= max_iter; i++)
-    {
+    for (int iter = 0; iter <= max_iter; iter++)
+    {   
+        t_iter.start();
+        printf("iter = %d", iter);
         compute_C_and_gradC();
         fill_gradC_triplets();
         G.makeCompressed();
@@ -696,11 +699,11 @@ void substep_all_solver()
             }
         }
 
-        auto maxElement = std::max_element(dLambda.begin(), dLambda.end());
-        auto minElement = std::min_element(dLambda.begin(), dLambda.end());
-        std::cout << "\nLast value of dLambda " << dLambda[dLambda.size()-1] << std::endl;
-        std::cout << "Max value of dLambda " << *maxElement << std::endl;
-        std::cout << "Min value of dLambda " << *minElement << std::endl;
+        // auto maxElement = std::max_element(dLambda.begin(), dLambda.end());
+        // auto minElement = std::min_element(dLambda.begin(), dLambda.end());
+        // std::cout << "\nLast value of dLambda " << dLambda[dLambda.size()-1] << std::endl;
+        // std::cout << "Max value of dLambda " << *maxElement << std::endl;
+        // std::cout << "Min value of dLambda " << *minElement << std::endl;
 
         //transfer back to pos
         incre_lagrangian(); 
@@ -710,22 +713,23 @@ void substep_all_solver()
         // copy_dlambda(dLambda_eigen, dLambda);
         Eigen::VectorXf dpos_ = M_inv * G.transpose()*dLambda_eigen;
         
-        printf("smallest dLambda_eigen:\n");
-        cout<<dLambda_eigen.minCoeff()<<endl;
-        printf("biggest dLambda_eigen:\n");
-        cout<<dLambda_eigen.maxCoeff()<<endl;
+        // printf("smallest dLambda_eigen:\n");
+        // cout<<dLambda_eigen.minCoeff()<<endl;
+        // printf("biggest dLambda_eigen:\n");
+        // cout<<dLambda_eigen.maxCoeff()<<endl;
 
-        printf("smallest dpos_:\n");
-        cout<<dpos_.minCoeff()<<endl;
-        printf("biggest dpos_:\n");
-        cout<<dpos_.maxCoeff()<<endl;
+        // printf("smallest dpos_:\n");
+        // cout<<dpos_.minCoeff()<<endl;
+        // printf("biggest dpos_:\n");
+        // cout<<dpos_.maxCoeff()<<endl;
         
-        printf("pos[0]: %f\n", pos[0]);
+        // printf("pos[0]: %f\n", pos[0]);
 
         add_dpos(dpos_);
 
-        printf("pos[0]: %f\n", pos[0]);
+        // printf("pos[0]: %f\n", pos[0]);
 
+        t_iter.end();
     }
     update_vel();
 }

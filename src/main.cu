@@ -649,24 +649,24 @@ void incre_lagrangian()
     }
 }
 
-void add_dpos(const Eigen::VectorXf& dpos)
-{
-    auto dpos3 = dpos.reshaped(NV,3);
-    Vec3f dpos3i=Vec3f(0.0, 0.0, 0.0);
-    for(int i=0; i < num_particles; i++)
-    {
-        dpos3i = dpos3.row(i);
-        pos[i] += dpos3i;
-    }
-}
+// void add_dpos(const Eigen::VectorXf& dpos)
+// {
+//     auto dpos3 = dpos.reshaped(NV,3);
+//     Vec3f dpos3i=Vec3f(0.0, 0.0, 0.0);
+//     for(int i=0; i < num_particles; i++)
+//     {
+//         dpos3i = dpos3.row(i);
+//         pos[i] += dpos3i;
+//     }
+// }
 
-void copy_dlambda(Eigen::VectorXf &dLambda_eigen, const Field1f &dLambda)
-{
-    for(int i=0; i < NE; i++)
-    {
-        dLambda_eigen[i] = dLambda[i];
-    }
-}
+// void copy_dlambda(Eigen::VectorXf &dLambda_eigen, const Field1f &dLambda)
+// {
+//     for(int i=0; i < NE; i++)
+//     {
+//         dLambda_eigen[i] = dLambda[i];
+//     }
+// }
 
 void substep_all_solver()
 {
@@ -677,6 +677,13 @@ void substep_all_solver()
     {   
         t_iter.start();
         printf("iter = %d", iter);
+
+        //copy to pos_mid
+        for(int i=0; i < num_particles; i++)
+        {
+            pos_mid[i] = pos[i];
+        }
+
         compute_C_and_gradC();
         fill_gradC_triplets();
         G.makeCompressed();
@@ -685,8 +692,6 @@ void substep_all_solver()
         A = A + ALPHA;
         A.makeCompressed();
         fill_b();
-        // savetxt("b.mtx", b);
-        // exit(0);
 
         //solve Ax=b
         if(solver_type=="GS")
@@ -699,39 +704,26 @@ void substep_all_solver()
             }
         }
 
-        // auto maxElement = std::max_element(dLambda.begin(), dLambda.end());
-        // auto minElement = std::min_element(dLambda.begin(), dLambda.end());
-        // std::cout << "\nLast value of dLambda " << dLambda[dLambda.size()-1] << std::endl;
-        // std::cout << "Max value of dLambda " << *maxElement << std::endl;
-        // std::cout << "Min value of dLambda " << *minElement << std::endl;
-
         //transfer back to pos
         incre_lagrangian(); 
 
         Eigen::Map<Eigen::VectorXf> dLambda_eigen(dLambda.data(), dLambda.size());
-        // VectorXf dLambda_eigen(dLambda.size());
-        // copy_dlambda(dLambda_eigen, dLambda);
+
         Eigen::VectorXf dpos_ = M_inv * G.transpose()*dLambda_eigen;
-        
-        // printf("smallest dLambda_eigen:\n");
-        // cout<<dLambda_eigen.minCoeff()<<endl;
-        // printf("biggest dLambda_eigen:\n");
-        // cout<<dLambda_eigen.maxCoeff()<<endl;
-
-        // printf("smallest dpos_:\n");
-        // cout<<dpos_.minCoeff()<<endl;
-        // printf("biggest dpos_:\n");
-        // cout<<dpos_.maxCoeff()<<endl;
-        
-        // printf("pos[0]: %f\n", pos[0]);
-
-        add_dpos(dpos_);
-
-        // printf("pos[0]: %f\n", pos[0]);
+         
+        // add dpos to pos
+        for(int i=0; i < num_particles; i++)
+        {
+            pos[i] = pos_mid[i] + Vec3f(dpos_[3*i], dpos_[3*i+1], dpos_[3*i+2]);
+        }
+        // printf("pos[255]:%.5e %.5e %.5e\n", pos[255][0], pos[255][1], pos[255][2]);
 
         t_iter.end();
     }
     update_vel();
+
+    // printf("vel[255]:%.5e %.5e %.5e\n", vel[255][0], vel[255][1], vel[255][2]);
+    // exit(0);
 }
 
 

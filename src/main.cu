@@ -332,6 +332,24 @@ void printScalarField(std::string fileName, T content,  size_t precision=8)
     f.close();
 }
 
+
+void write_obj(std::string name="")
+{
+    tic();
+    std::string path = proj_dir_path + "/results/";
+    std::string out_mesh_name =  path + std::to_string(frame_num) + ".obj";
+    if(name!="")
+    {
+        out_mesh_name = path + name + std::to_string(frame_num) + ".obj";
+    }
+
+    printf("output mesh: %s\n", out_mesh_name.c_str());
+    copy_pos_to_pos_vis();
+    igl::writeOBJ(out_mesh_name, pos_vis, tri_vis);
+    toc("output mesh");
+}
+
+
 /* -------------------------------------------------------------------------- */
 /*                            simulation functions                            */
 /* -------------------------------------------------------------------------- */
@@ -716,8 +734,8 @@ void substep_all_solver()
         {
             pos[i] = pos_mid[i] + Vec3f(dpos_[3*i], dpos_[3*i+1], dpos_[3*i+2]);
         }
-        // printf("pos[255]:%.5e %.5e %.5e\n", pos[255][0], pos[255][1], pos[255][2]);
 
+        // write_obj("_" + to_string(iter) + "_");
         t_iter.end();
     }
     update_vel();
@@ -741,13 +759,7 @@ void main_loop()
 
         if (output_mesh)
         {
-            tic();
-            std::string out_mesh_name = proj_dir_path + "/results/" + std::to_string(frame_num) + ".obj";
-
-            printf("output mesh: %s\n", out_mesh_name.c_str());
-            copy_pos_to_pos_vis();
-            igl::writeOBJ(out_mesh_name, pos_vis, tri_vis);
-            toc("output mesh");
+            write_obj();
         }
 
         printf("frame_num = %d done\n", frame_num);
@@ -845,12 +857,8 @@ void init_tri()
 }
 
 
-void run_simulation()
+void initialization()
 {
-    printf("run_simulation\n");
-
-    t_sim.start();
-
     t_init.start();
     resize_fields();
     init_pos();
@@ -859,11 +867,16 @@ void run_simulation()
     load_R_P();
     fill_M_inv();
     fill_ALPHA();
-    // test();
     t_init.end();
+}
 
+void run_simulation()
+{
+    printf("run_simulation\n");
+
+    t_sim.start();
+    initialization();
     main_loop();
-
     t_sim.end();
 }
 
@@ -879,8 +892,5 @@ int main(int argc, char *argv[])
     run_simulation();
 
     copy_pos_to_pos_vis();
-
-    // igl::writeOBJ(proj_dir_path + "/data/models/bunny2.obj", pos_vis, tri);
-
     t_main.end("","s");
 }

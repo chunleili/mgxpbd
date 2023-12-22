@@ -686,6 +686,53 @@ void incre_lagrangian()
 //     }
 // }
 
+void transfer_back_to_pos_matrix()
+{
+    //transfer back to pos
+    for(int i=0; i < NE; i++)
+    {
+        lagrangian[i] += dLambda[i];
+    }
+
+    Eigen::Map<Eigen::VectorXf> dLambda_eigen(dLambda.data(), dLambda.size());
+
+    Eigen::VectorXf dpos_ = M_inv * G.transpose()*dLambda_eigen;
+        
+    // add dpos to pos
+    for(int i=0; i < num_particles; i++)
+    {
+        pos[i] = pos_mid[i] + Vec3f(dpos_[3*i], dpos_[3*i+1], dpos_[3*i+2]);
+    }
+}
+
+
+void transfer_back_to_pos_mfree(const Field1f& dLambda, const Field23f & gradC)
+{
+    reset_accpos();
+    
+    for (int i = 0; i < NE; i++)
+    {
+        int idx0 = edge[i][0];
+        int idx1 = edge[i][1];
+        float invM0 = inv_mass[idx0];
+        float invM1 = inv_mass[idx1];
+        float delta_lagrangian = dLambda[i];
+        Vec3f gradient = gradC[i][0];
+        lagrangian[i] += delta_lagrangian;
+        if (invM0 != 0.0)
+        {
+            acc_pos[idx0] += invM0 * delta_lagrangian * gradient;
+        }
+        if (invM1 != 0.0)
+        {
+            acc_pos[idx1] -= invM1 * delta_lagrangian * gradient;
+        }
+    }
+
+    update_pos();
+}
+
+
 void substep_all_solver()
 {
     printf("\n\n----frame_num:%d----\n", frame_num);
@@ -722,26 +769,12 @@ void substep_all_solver()
             }
         }
 
-        //transfer back to pos
-        incre_lagrangian(); 
-
-        Eigen::Map<Eigen::VectorXf> dLambda_eigen(dLambda.data(), dLambda.size());
-
-        Eigen::VectorXf dpos_ = M_inv * G.transpose()*dLambda_eigen;
-         
-        // add dpos to pos
-        for(int i=0; i < num_particles; i++)
-        {
-            pos[i] = pos_mid[i] + Vec3f(dpos_[3*i], dpos_[3*i+1], dpos_[3*i+2]);
-        }
+        transfer_back_to_pos_mfree(dLambda, gradC);
 
         // write_obj("_" + to_string(iter) + "_");
         t_iter.end();
     }
     update_vel();
-
-    // printf("vel[255]:%.5e %.5e %.5e\n", vel[255][0], vel[255][1], vel[255][2]);
-    // exit(0);
 }
 
 

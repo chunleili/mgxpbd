@@ -743,12 +743,6 @@ void substep_all_solver()
         t_iter.start();
         printf("iter = %d", iter);
 
-        //copy to pos_mid
-        for(int i=0; i < num_particles; i++)
-        {
-            pos_mid[i] = pos[i];
-        }
-
         compute_C_and_gradC();
         fill_gradC_triplets();
         G.makeCompressed();
@@ -762,7 +756,7 @@ void substep_all_solver()
         if(solver_type=="GS")
         {
             int max_GS_iter = 1;
-            dLambda.resize(M, 0.0);
+            std::fill(dLambda.begin(), dLambda.end(), 0.0);
             for(int GS_iter=0; GS_iter < max_GS_iter; GS_iter++)
             {
                 gauss_seidel<int, float, float>(A.outerIndexPtr(), A.outerSize(), A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(), dLambda.data(), dLambda.size(), b.data(), b.size(), 0, M, 1);
@@ -770,6 +764,8 @@ void substep_all_solver()
         }
 
         transfer_back_to_pos_mfree(dLambda, gradC);
+        std::fill(dLambda.begin(), dLambda.end(), 0.0);
+        std::fill(acc_pos.begin(), acc_pos.end(), Vec3f(0.0, 0.0, 0.0));
 
         // write_obj("_" + to_string(iter) + "_");
         t_iter.end();

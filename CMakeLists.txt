@@ -12,3 +12,9 @@ target_link_libraries(main PRIVATE Eigen3::Eigen)
 
 find_package(libigl CONFIG REQUIRED)
 target_link_libraries(main PRIVATE igl::igl_core igl_copyleft::igl_copyleft_core)
+
+
+option(USE_VISUALIZER "Use visualizer"	OFF)
+if(USE_VISUALIZER)
+
+endif()

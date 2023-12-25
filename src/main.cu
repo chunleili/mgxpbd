@@ -920,6 +920,6 @@ int main(int argc, char *argv[])
 
     run_simulation();
 
-    copy_pos_to_pos_vis();
+    // copy_pos_to_pos_vis();
     t_main.end("","s");
 }

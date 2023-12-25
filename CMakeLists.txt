@@ -14,7 +14,7 @@ find_package(libigl CONFIG REQUIRED)
 target_link_libraries(main PRIVATE igl::igl_core igl_copyleft::igl_copyleft_core)
 
 
-option(USE_VISUALIZER "Use visualizer"	OFF)
-if(USE_VISUALIZER)
-
+option(USE_VIEWER "Use viewer"	OFF)
+if(USE_VIEWER)
+    add_subdirectory(tools/viewer)
 endif()

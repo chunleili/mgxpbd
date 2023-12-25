@@ -1,9 +1,14 @@
 #include <igl/readOFF.h>
+#include <igl/readOBJ.h>
 #include <igl/opengl/glfw/Viewer.h>
 #include <iostream>
 #include <string>
 #include <fstream>
 #include <vector>
+#include <filesystem>
+#include <chrono>
+#include <thread>
+#include <functional>
 
 using namespace Eigen;
 using namespace std;
@@ -15,82 +20,40 @@ using Field2i = std::vector<Vec2i>;
 using Field1f = std::vector<float>;
 
 std::string proj_dir_path;
-
-int N = 256;
-int NV = (N + 1) * (N + 1);
-int NT = 2 * N * N;
-int NE = 2 * N * (N + 1) + N * N;
-float h = 0.01;
-int M = NE;
-int new_M = int(NE / 100);
-float compliance = 1.0e-8;
-float alpha = compliance * (1.0 / h / h);
+int wait_milliseconds = 1000;
+bool is_test = false;
+int start_frame = 1;
+int end_frame = 2; //[start_frame, end_frame)
+int paused = 0;
 
 unsigned num_particles = 0;
 
-Eigen::MatrixXd pos_vis;  // vertex positions
-Eigen::MatrixXd pos_orig; 
-Eigen::MatrixXi tri;  // triangle indices
+Eigen::MatrixXd pos_vis; // vertex positions
+Eigen::MatrixXd pos_orig;
+Eigen::MatrixXi tri; // triangle indices
 
 Field3f pos;
-Field2i edge; 
-Field3f vel;
-Field1f inv_mass;
-Field1f rest_len;
-Field1f lagrangian;
-Field1f constraints;
-Field1f dLambda;
-Field3f pos_mid;
-Field3f acc_pos;
-Field3f old_pos;
 
-// Eigen::MatrixXi edge; // edge indices
-// Eigen::MatrixXf rest_len;
-// Eigen::MatrixXf lagrangian;
-// Eigen::MatrixXf constraints;
-// Eigen::MatrixXf dLambda;
-// Eigen::MatrixXf pos_mid;
-// Eigen::MatrixXf acc_pos;
-// Eigen::MatrixXf old_pos;
-// Eigen::MatrixXf vel;
-// Eigen::MatrixXf inv_mass;
-// Eigen::MatrixXf gradC;
-
-
-// void copy_field(MatrixXd src, Field3f dst, bool reverse = false)
-// {
-//   for (int i = 0; i < src.rows(); i++)
-//   {
-//     for (int j = 0; j < src.cols(); j++)
-//     {
-//       if (!reverse)
-//         dst(i, j) = src[i][j];
-//       else
-//         src[i][j] = dst(i, j);
-//     }
-//   }
-// }
-
-//copy pos to pos_vis for visualization
+// copy pos to pos_vis for visualization
 void copy_pos()
 {
   for (unsigned i = 0; i < num_particles; i++)
   {
     for (int j = 0; j < 3; j++)
     {
-        pos_vis(i, j) = pos[i][j];
+      pos_vis(i, j) = pos[i][j];
     }
   }
 }
 
-//copy pos_vis to pos
-void copy_pos_init()
+// copy pos_vis to pos
+void copy_pos_vis_to_pos()
 {
   for (unsigned i = 0; i < num_particles; i++)
   {
     for (int j = 0; j < 3; j++)
     {
-        pos[i][j] = pos_vis(i, j);
+      pos[i][j] = pos_vis(i, j);
     }
   }
 }
@@ -100,33 +63,58 @@ void semi_euler()
   Vec3f gravity(0.0, -0.01, 0.0);
   for (unsigned i = 0; i < num_particles; i++)
   {
-    // if (inv_mass(i) != 0.0)
+    pos[i][1] -= 0.01;
+  }
+}
+
+void collision_response()
+{
+  for (unsigned i = 0; i < num_particles; i++)
+  {
+    if (pos[i][1] < 0.0)
     {
-      pos[i][1] -= 0.01;
-      // vel.row(i) += h * gravity;
-      // old_pos.row(i) = pos.row(i);
-      // pos.row(i) += h * vel.row(i);
+      pos[i][1] = 0.0;
     }
   }
 }
 
-
-void collision_response()
+void load_external_animation()
 {
-    for (unsigned i = 0; i < num_particles; i++)
+  for (int i = start_frame; i < end_frame; i++)
+  {
+    if (i == start_frame)
     {
-      if (pos[i][1] < 0.0)
-      {
-        pos[i][1] = 0.0;
-      }
+      pos_orig = pos_vis;
     }
+    string filename = proj_dir_path + "/results/" + to_string(i) + ".obj";
+    printf("Loading %s\n", filename.c_str());
+    igl::readOBJ(filename, pos_vis, tri);
+  }
+
+  paused = 1;
+  printf("Load external animation done\n");
 }
 
+void update_physics()
+{
+  if (is_test)
+  {
+    semi_euler();
+    collision_response();
+    copy_pos();
+    return;
+  }
+  else
+  {
+    load_external_animation();
+    return;
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 /*                              utility functions                             */
 /* -------------------------------------------------------------------------- */
-void loadtxt(std::string filename, Field3f& M)
+void loadtxt(std::string filename, Field3f &M)
 {
   printf("Loading %s with Field3f\n", filename.c_str());
   std::ifstream inputFile(filename);
@@ -154,7 +142,7 @@ void loadtxt(std::string filename, Field3f& M)
   }
 }
 
-void loadtxt(std::string filename, Field2i& M)
+void loadtxt(std::string filename, Field2i &M)
 {
   printf("Loading %s with Field2i\n", filename.c_str());
   std::ifstream inputFile(filename);
@@ -243,20 +231,22 @@ void loadtxt(std::string filename, Eigen::MatrixXf &M)
   }
 }
 
-std::string get_directory_path(const std::string &filePath)
+std::string get_proj_dir_path()
 {
-  size_t found = filePath.find_last_of("/\\");
-  if (found != std::string::npos)
-  {
-    return filePath.substr(0, found);
-  }
-  return "";
+  std::filesystem::path p(__FILE__);
+  std::filesystem::path prj_path = p.parent_path().parent_path().parent_path();
+  proj_dir_path = prj_path.string();
+
+  std::cout << "Project directory path: " << proj_dir_path << std::endl;
+  return proj_dir_path;
 }
+// this code run before main, in case of user forget to call get_proj_dir_path()
+static string proj_dir_path_pre_get = get_proj_dir_path();
 /* -------------------------------------------------------------------------- */
 /*                          end of utility functions                          */
 /* -------------------------------------------------------------------------- */
 
-void visualization()
+void visualization(std::function<void(void)> &update_physics_callback)
 {
   // Visualization
   igl::opengl::glfw::Viewer viewer;
@@ -272,11 +262,22 @@ void visualization()
       return false;
     case ' ':
       viewer.core().is_animating = !viewer.core().is_animating;
+      paused = !paused;
+      printf("paused %d\n", !viewer.core().is_animating);
       return true;
     case 'r':
       pos_vis = pos_orig;
       viewer.data().set_vertices(pos_vis);
       viewer.data().compute_normals();
+      printf("reset\n");
+      return true;
+    case 'p': // speed up
+      wait_milliseconds /= 2;
+      printf("Faster! Wait %d ms every frame\n", wait_milliseconds);
+      return true;
+    case 'l': // speed down
+      wait_milliseconds /= 2;
+      printf("Slower! Wait %d ms every frame\n", wait_milliseconds);
       return true;
     }
   };
@@ -284,13 +285,13 @@ void visualization()
   viewer.callback_pre_draw = [&](igl::opengl::glfw::Viewer &viewer) -> bool
   {
     glEnable(GL_CULL_FACE);
-    if (viewer.core().is_animating)
+    if (viewer.core().is_animating && !paused)
     {
-      semi_euler();
+      // 定义等待的时间间隔，这里是 1 秒钟. 使程序休眠指定的时间
+      std::chrono::milliseconds duration(wait_milliseconds);
+      std::this_thread::sleep_for(duration);
 
-      collision_response();
-
-      copy_pos();
+      update_physics_callback();
 
       viewer.data().set_vertices(pos_vis);
       viewer.data().compute_normals();
@@ -306,27 +307,36 @@ void visualization()
   viewer.launch();
 }
 
-
-
-int main(int argc, char *argv[])
+void test()
 {
-  // find the project directory path
-  std::string main_path = __FILE__;
-  proj_dir_path = get_directory_path(main_path);
-  std::cout << "Project directory path: " << proj_dir_path << std::endl;
-
   // Load a mesh
   igl::readOFF(proj_dir_path + "/data/models/bunny.OFF", pos_vis, tri);
+  // igl::readOBJ(proj_dir_path + "/results/1.obj", pos_vis, tri);
   pos_orig = pos_vis; // keep original position for reset
 
   num_particles = pos_vis.rows();
 
   pos.resize(num_particles);
 
-  copy_pos_init();
+  copy_pos_vis_to_pos();
 
-  loadtxt(proj_dir_path + "/data/misc/edge.txt", edge);
-  // loadtxt(proj_dir_path + "/data/misc/rest_len.txt", rest_len);
+  // loadtxt(proj_dir_path + "/data/misc/edge.txt", edge);
+  std::function<void(void)> func = update_physics;
+  visualization(func);
+}
 
-  visualization();
+int main(int argc, char *argv[])
+{
+  if (is_test)
+  {
+    printf("Test mode\n");
+    test();
+    return 0;
+  }
+
+  else
+  {
+    std::function<void(void)> func = update_physics;
+    visualization(func);
+  }
 }

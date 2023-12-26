@@ -1,10 +1,8 @@
 # cmake_minimum_required(VERSION 3.16)
 project(viewer)
 
-list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+add_executable(viewer ${CMAKE_CURRENT_LIST_DIR}/viewer.cpp)
 
-# Libigl
-include(libigl)
 
 # Enable the target igl::glfw
 igl_include(glfw)
@@ -24,12 +22,9 @@ igl_include(glfw)
 #igl_include(restricted mosek)
 #igl_include(restricted triangle)
 
-# Add your project files
-file(GLOB SRC_FILES *.cpp)
-add_executable(${PROJECT_NAME} ${SRC_FILES})
 
 # Link igl (and the glfw module) to your project
-target_link_libraries(${PROJECT_NAME} PUBLIC 
+target_link_libraries(viewer PUBLIC 
   igl::glfw
   ## Other modules you could link to
   # igl::embree

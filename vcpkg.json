@@ -3,7 +3,6 @@
     "version": "0.0.1",
     "description": "multigrid xpbd",
     "dependencies": [
-        "libigl",
         "eigen3",
         "glm"
     ]

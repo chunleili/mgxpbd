@@ -26,10 +26,10 @@
 #include <igl/writeOBJ.h>
 
 using namespace std;
+using Eigen::Map;
 using Eigen::Vector2i;
 using Eigen::Vector3f;
 using Eigen::VectorXf;
-using Eigen::Map;
 
 // constants
 const int N = 256;
@@ -41,7 +41,7 @@ const int M = NE;
 // const int new_M = int(NE / 100);
 const float compliance = 1.0e-8;
 const float alpha = compliance * (1.0 / h / h);
-const float omega = 0.5; //under-relaxing factor
+const float omega = 0.5; // under-relaxing factor
 
 // control variables
 std::string proj_dir_path;
@@ -62,7 +62,7 @@ using Field3f = vector<Vec3f>;
 using Field3i = vector<Vec3i>;
 using Field2i = vector<Vec2i>;
 using Field1i = vector<int>;
-using Field23f = vector<array<Vec3f,2>>;
+using Field23f = vector<array<Vec3f, 2>>;
 
 // global fields
 Field3f pos;
@@ -87,26 +87,25 @@ Eigen::MatrixXi tri_vis;
 
 Eigen::SparseMatrix<float> R, P;
 Eigen::SparseMatrix<float> M_inv(3 * NV, 3 * NV);
-Eigen::SparseMatrix<float> ALPHA(M,M);
+Eigen::SparseMatrix<float> ALPHA(M, M);
 Eigen::SparseMatrix<float> A(M, M);
-Eigen::SparseMatrix<float> G(M, 3*NV);
+Eigen::SparseMatrix<float> G(M, 3 * NV);
 // Eigen::VectorXf dpos(3*NV);
 
 // utility functions
-#if defined(WIN32) || defined(_WIN32) || defined(WIN64)	   
-  #define FORCE_INLINE __forceinline
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64)
+#define FORCE_INLINE __forceinline
 #else
-  #define FORCE_INLINE __attribute__((always_inline))
+#define FORCE_INLINE __attribute__((always_inline))
 #endif
 
-
-FORCE_INLINE float length(const Vec3f& vec) 
+FORCE_INLINE float length(const Vec3f &vec)
 {
     // return glm::length(vec);
     return vec.norm();
 }
 
-FORCE_INLINE Vec3f normalize(const Vec3f& vec) 
+FORCE_INLINE Vec3f normalize(const Vec3f &vec)
 {
     // return glm::normalize(vec);
     return vec.normalized();
@@ -161,15 +160,15 @@ public:
     {
         m_start = std::chrono::steady_clock::now();
     };
-    inline void end(string msg = "", string unit="ms")
+    inline void end(string msg = "", string unit = "ms")
     {
         m_end = std::chrono::steady_clock::now();
-        if(unit == "ms")
+        if (unit == "ms")
         {
             std::chrono::duration<double, std::milli> elapsed = m_end - m_start;
             printf("%s(%s timer): %.0f(ms)\n", msg.c_str(), name.c_str(), elapsed.count());
         }
-        else if(unit == "s")
+        else if (unit == "s")
         {
             std::chrono::duration<double> elapsed = m_end - m_start;
             printf("%s(%s timer): %.0f(s)\n", msg.c_str(), name.c_str(), elapsed.count());
@@ -263,7 +262,6 @@ void savetxt(string filename, Field1f &field)
     Eigen::saveMarket(v, filename);
 }
 
-
 void test()
 {
     Eigen::saveMarket(M_inv, "M.mtx");
@@ -275,7 +273,7 @@ void test()
     Eigen::saveMarket(G, "G.mtx");
 }
 
-float maxField(std::vector<Vec3f>& field)
+float maxField(std::vector<Vec3f> &field)
 {
     auto max = field[0][0];
     for (unsigned int i = 1; i < field.size(); i++)
@@ -289,56 +287,54 @@ float maxField(std::vector<Vec3f>& field)
     return max;
 }
 
-
 /**
  * @brief 保存向量场到txt
- * 
- * @tparam T 
- * @param fileName 文件名 
+ *
+ * @tparam T
+ * @param fileName 文件名
  * @param content 要打印的场
  * @param precision 精度（默认小数点后8位数）
  */
-template<typename T>
-void printVectorField(std::string fileName, T content,  size_t precision=8)
+template <typename T>
+void printVectorField(std::string fileName, T content, size_t precision = 8)
 {
     std::ofstream f;
     f.open(fileName);
-    for(const auto& x:content)
+    for (const auto &x : content)
     {
-        for(const auto& xx:x)
-            f<<std::fixed <<std::setprecision(precision)<<xx<<"\t";
-        f<<"\n";
-    } 
+        for (const auto &xx : x)
+            f << std::fixed << std::setprecision(precision) << xx << "\t";
+        f << "\n";
+    }
     f.close();
 }
 
 /**
  * @brief 保存标场到txt
- * 
- * @tparam T 
- * @param fileName 文件名 
+ *
+ * @tparam T
+ * @param fileName 文件名
  * @param content 要打印的场
  * @param precision 精度（默认小数点后8位数）
  */
-template<typename T>
-void printScalarField(std::string fileName, T content,  size_t precision=8)
+template <typename T>
+void printScalarField(std::string fileName, T content, size_t precision = 8)
 {
     std::ofstream f;
     f.open(fileName);
-    for(const auto& x:content)
+    for (const auto &x : content)
     {
-        f<<std::fixed <<std::setprecision(precision)<<x<<"\n";
-    } 
+        f << std::fixed << std::setprecision(precision) << x << "\n";
+    }
     f.close();
 }
 
-
-void write_obj(std::string name="")
+void write_obj(std::string name = "")
 {
     tic();
     std::string path = proj_dir_path + "/results/";
-    std::string out_mesh_name =  path + std::to_string(frame_num) + ".obj";
-    if(name!="")
+    std::string out_mesh_name = path + std::to_string(frame_num) + ".obj";
+    if (name != "")
     {
         out_mesh_name = path + name + std::to_string(frame_num) + ".obj";
     }
@@ -348,7 +344,6 @@ void write_obj(std::string name="")
     igl::writeOBJ(out_mesh_name, pos_vis, tri_vis);
     toc("output mesh");
 }
-
 
 /* -------------------------------------------------------------------------- */
 /*                            simulation functions                            */
@@ -511,16 +506,14 @@ void substep_xpbd()
     update_vel();
 }
 
-
-
 void fill_M_inv()
 {
     typedef Eigen::Triplet<float> T;
 
-    std::vector<T> inv_mass_3(3*NV);
-    for(int i=0; i < 3*NV; i++)
+    std::vector<T> inv_mass_3(3 * NV);
+    for (int i = 0; i < 3 * NV; i++)
     {
-        inv_mass_3[i] = T(i, i, inv_mass[int(i/3)]);
+        inv_mass_3[i] = T(i, i, inv_mass[int(i / 3)]);
     }
     M_inv.setFromTriplets(inv_mass_3.begin(), inv_mass_3.end());
     M_inv.makeCompressed();
@@ -531,7 +524,7 @@ void fill_ALPHA()
     typedef Eigen::Triplet<float> T;
 
     std::vector<T> alpha_(NE);
-    for(int i=0; i < NE; i++)
+    for (int i = 0; i < NE; i++)
     {
         alpha_[i] = T(i, i, alpha);
     }
@@ -541,7 +534,7 @@ void fill_ALPHA()
 
 void compute_C_and_gradC()
 {
-    for(int i=0; i < NE; i++)
+    for (int i = 0; i < NE; i++)
     {
         int idx0 = edge[i][0];
         int idx1 = edge[i][1];
@@ -554,23 +547,22 @@ void compute_C_and_gradC()
     }
 }
 
-
 void fill_gradC_triplets()
 {
     typedef Eigen::Triplet<float> T;
 
     std::vector<T> gradC_triplets;
-    gradC_triplets.reserve(6*NE);
+    gradC_triplets.reserve(6 * NE);
     int cnt = 0;
-    for(int j=0; j < NE; j++)
+    for (int j = 0; j < NE; j++)
     {
         auto ind = edge[j];
-        for(int p=0; p < 2; p++)
+        for (int p = 0; p < 2; p++)
         {
-            for(int d=0; d<3; d++)
+            for (int d = 0; d < 3; d++)
             {
                 int pid = ind[p];
-                gradC_triplets.push_back(T(j, 3*pid+d, gradC[j][p][d]));
+                gradC_triplets.push_back(T(j, 3 * pid + d, gradC[j][p][d]));
                 cnt++;
             }
         }
@@ -580,10 +572,9 @@ void fill_gradC_triplets()
     G.makeCompressed();
 }
 
-
 void fill_b()
 {
-    for(int i=0; i < NE; i++)
+    for (int i = 0; i < NE; i++)
     {
         b[i] = -constraints[i] - alpha * lagrangian[i];
     }
@@ -629,39 +620,42 @@ void fill_b()
 // from https://github.com/pyamg/pyamg/blob/0431f825d7e6683c208cad20572e92fc0ef230c1/pyamg/amg_core/relaxation.h#L45
 // I=int, T=float, F=float
 */
-template<class I=int, class T=float, class F=float>
+template <class I = int, class T = float, class F = float>
 void gauss_seidel(const I Ap[], const int Ap_size,
                   const I Aj[], const int Aj_size,
                   const T Ax[], const int Ax_size,
-                        T  x[], const int  x_size,
-                  const T  b[], const int  b_size,
+                  T x[], const int x_size,
+                  const T b[], const int b_size,
                   const I row_start,
                   const I row_stop,
                   const I row_step)
 {
-    for(I i = row_start; i != row_stop; i += row_step) {
+    for (I i = row_start; i != row_stop; i += row_step)
+    {
         I start = Ap[i];
-        I end   = Ap[i+1];
+        I end = Ap[i + 1];
         T rsum = 0.0;
         T diag = 0.0;
 
-        for(I jj = start; jj < end; jj++){
+        for (I jj = start; jj < end; jj++)
+        {
             I j = Aj[jj];
             if (i == j)
-                diag  = Ax[jj];
+                diag = Ax[jj];
             else
-                rsum += Ax[jj]*x[j];
+                rsum += Ax[jj] * x[j];
         }
 
-        if (diag != (F) 0.0){
-            x[i] = (b[i] - rsum)/diag;
+        if (diag != (F)0.0)
+        {
+            x[i] = (b[i] - rsum) / diag;
         }
     }
 }
 
 void incre_lagrangian()
 {
-    for(int i=0; i < NE; i++)
+    for (int i = 0; i < NE; i++)
     {
         lagrangian[i] += dLambda[i];
     }
@@ -688,28 +682,27 @@ void incre_lagrangian()
 
 void transfer_back_to_pos_matrix()
 {
-    //transfer back to pos
-    for(int i=0; i < NE; i++)
+    // transfer back to pos
+    for (int i = 0; i < NE; i++)
     {
         lagrangian[i] += dLambda[i];
     }
 
     Eigen::Map<Eigen::VectorXf> dLambda_eigen(dLambda.data(), dLambda.size());
 
-    Eigen::VectorXf dpos_ = M_inv * G.transpose()*dLambda_eigen;
-        
+    Eigen::VectorXf dpos_ = M_inv * G.transpose() * dLambda_eigen;
+
     // add dpos to pos
-    for(int i=0; i < num_particles; i++)
+    for (int i = 0; i < num_particles; i++)
     {
-        pos[i] = pos_mid[i] + Vec3f(dpos_[3*i], dpos_[3*i+1], dpos_[3*i+2]);
+        pos[i] = pos_mid[i] + Vec3f(dpos_[3 * i], dpos_[3 * i + 1], dpos_[3 * i + 2]);
     }
 }
 
-
-void transfer_back_to_pos_mfree(const Field1f& dLambda, const Field23f & gradC)
+void transfer_back_to_pos_mfree(const Field1f &dLambda, const Field23f &gradC)
 {
     reset_accpos();
-    
+
     for (int i = 0; i < NE; i++)
     {
         int idx0 = edge[i][0];
@@ -732,47 +725,45 @@ void transfer_back_to_pos_mfree(const Field1f& dLambda, const Field23f & gradC)
     update_pos();
 }
 
-
 void substep_all_solver()
 {
     printf("\n\n----frame_num:%d----\n", frame_num);
     semi_euler();
     reset_lagrangian();
     for (int iter = 0; iter <= max_iter; iter++)
-    {   
+    {
         t_iter.start();
         printf("iter = %d", iter);
 
+        // assemble A and b
         compute_C_and_gradC();
         fill_gradC_triplets();
         G.makeCompressed();
-        // assemble A and b
         A = G * M_inv * G.transpose();
         A = A + ALPHA;
         A.makeCompressed();
         fill_b();
 
-        //solve Ax=b
-        if(solver_type=="GS")
+        // solve Ax=b
+        if (solver_type == "GS")
         {
             int max_GS_iter = 1;
             std::fill(dLambda.begin(), dLambda.end(), 0.0);
-            for(int GS_iter=0; GS_iter < max_GS_iter; GS_iter++)
+            for (int GS_iter = 0; GS_iter < max_GS_iter; GS_iter++)
             {
-                gauss_seidel<int, float, float>(A.outerIndexPtr(), A.outerSize(), A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(), dLambda.data(), dLambda.size(), b.data(), b.size(), 0, M, 1);
+                gauss_seidel<int, float, float>(A.outerIndexPtr(), A.outerSize(),
+                                                A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(),
+                                                dLambda.data(), dLambda.size(), b.data(), b.size(), 0, M, 1);
             }
         }
 
         transfer_back_to_pos_mfree(dLambda, gradC);
         std::fill(dLambda.begin(), dLambda.end(), 0.0);
         std::fill(acc_pos.begin(), acc_pos.end(), Vec3f(0.0, 0.0, 0.0));
-
-        // write_obj("_" + to_string(iter) + "_");
         t_iter.end();
     }
     update_vel();
 }
-
 
 void main_loop()
 {
@@ -885,7 +876,6 @@ void init_tri()
     }
 }
 
-
 void initialization()
 {
     t_init.start();
@@ -921,5 +911,5 @@ int main(int argc, char *argv[])
     run_simulation();
 
     // copy_pos_to_pos_vis();
-    t_main.end("","s");
+    t_main.end("", "s");
 }

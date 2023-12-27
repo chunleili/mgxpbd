@@ -725,6 +725,15 @@ void transfer_back_to_pos_mfree(const Field1f &dLambda, const Field23f &gradC)
     update_pos();
 }
 
+void fill_A_add_alpha()
+{
+    for(int i=0; i<M; i++)
+    {
+        A.coeffRef(i,i) += alpha;
+    }
+}
+
+
 void substep_all_solver()
 {
     printf("\n\n----frame_num:%d----\n", frame_num);
@@ -739,8 +748,8 @@ void substep_all_solver()
         compute_C_and_gradC();
         fill_gradC_triplets();
         G.makeCompressed();
-        A = G * M_inv * G.transpose();
-        A = A + ALPHA;
+        A =  G * M_inv * G.transpose();
+        fill_A_add_alpha();
         A.makeCompressed();
         fill_b();
 

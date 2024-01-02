@@ -9,6 +9,8 @@
 #include <filesystem>
 #include <vector>
 #include <array>
+#include <algorithm>
+#include <unordered_set>
 
 #include <cuda_runtime.h>
 #include <thrust/universal_vector.h>
@@ -63,6 +65,7 @@ using Field3i = vector<Vec3i>;
 using Field2i = vector<Vec2i>;
 using Field1i = vector<int>;
 using Field23f = vector<array<Vec3f, 2>>;
+using FieldXi = vector<vector<int>>;
 
 // global fields
 Field3f pos;
@@ -80,6 +83,7 @@ Field23f gradC;
 Field1f b(M);
 // Field1f dpos(3*NV);
 Field1f dLambda(M);
+FieldXi v2e; // vertex to edges
 
 // we have to use pos_vis for visualization because libigl uses Eigen::MatrixXd
 Eigen::MatrixXd pos_vis;
@@ -345,6 +349,17 @@ void write_obj(std::string name = "")
     toc("output mesh");
 }
 
+
+void remove_duplicate(std::vector<int> &vec)
+{
+    std::unordered_set<int> s;
+    for (int i : vec)
+        s.insert(i);
+    vec.assign( s.begin(), s.end() );
+    sort( vec.begin(), vec.end() );
+}
+
+
 /* -------------------------------------------------------------------------- */
 /*                            simulation functions                            */
 /* -------------------------------------------------------------------------- */
@@ -416,6 +431,31 @@ void semi_euler()
         }
     }
 }
+
+
+/// @brief  input a vertex index, output the edge index, maintaining v2e field
+void init_v2e()
+{
+    v2e.resize(num_particles);
+
+    for(int i=0; i<edge.size(); i++)
+    {
+        int idx0 = edge[i][0];
+        int idx1 = edge[i][1];
+        
+        v2e[idx0].push_back(i);
+        v2e[idx1].push_back(i);
+
+        remove_duplicate(v2e[idx0]);
+        remove_duplicate(v2e[idx1]);
+
+        // sort( v2e[idx0].begin(), v2e[idx0].end() );
+        // v2e[idx0].erase( unique( v2e[idx0].begin(), v2e[idx0].end() ), v2e[idx0].end() );
+        // sort( v2e[idx1].begin(), v2e[idx1].end() );
+        // v2e[idx1].erase( unique( v2e[idx1].begin(), v2e[idx1].end() ), v2e[idx1].end() );
+    }
+}
+
 
 void reset_lagrangian()
 {
@@ -895,6 +935,9 @@ void initialization()
     load_R_P();
     fill_M_inv();
     fill_ALPHA();
+    init_v2e();
+    // savetxt("v2e.txt", v2e);
+    
     t_init.end();
 }
 

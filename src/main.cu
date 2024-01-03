@@ -54,6 +54,7 @@ unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
 string solver_type = "GS";
+bool should_load_adjacent_edge=true;
 
 // typedefs
 using Vec3f = Eigen::Vector3f;
@@ -84,6 +85,8 @@ Field1f b(M);
 // Field1f dpos(3*NV);
 Field1f dLambda(M);
 FieldXi v2e; // vertex to edges
+FieldXi adjacent_edge; //give a edge idx, get all its neighbor edges
+FieldXi edge_abi; //(a,b,i): vertex a, vertex b, edge i. (a<b)
 
 // we have to use pos_vis for visualization because libigl uses Eigen::MatrixXd
 Eigen::MatrixXd pos_vis;
@@ -285,6 +288,38 @@ void savetxt(string filename, Field1f &field)
     Eigen::saveMarket(v, filename);
 }
 
+
+
+void loadtxt(std::string filename, FieldXi &M)
+{
+  printf("Loading %s with FieldXi\n", filename.c_str());
+  std::ifstream inputFile(filename);
+  std::string line;
+//   std::vector<vec> values;
+  unsigned int rows = 0;
+  while (std::getline(inputFile, line))
+  {
+    std::istringstream iss(line);
+    int val;
+    M.resize(rows + 1);
+    while (iss >> val)
+    {
+      M[rows].push_back(val);
+    }
+    rows++;
+  }
+//   M.resize(rows);
+//   for (int i = 0; i < rows; i++)
+//   {
+//     unsigned int num_per_row = M[i].size();
+//     for (int j = 0; j < num_per_row; j++)
+//     {
+//       M[i][j] = values[i * num_per_row + j];
+//     }
+//   }
+}
+
+
 void test()
 {
     Eigen::saveMarket(M_inv, "M.mtx");
@@ -471,6 +506,117 @@ void init_v2e()
     }
 }
 
+// (a,b,i): vertex a, vertex b, edge i (a<b)
+void init_edge_abi()
+{
+    edge_abi.resize(NE);
+    for(int i=0; i<NE; i++)
+    {
+        edge_abi[i].resize(3);
+        edge_abi[i][0] = std::min(edge[i][0],edge[i][1]);
+        edge_abi[i][1] = std::max(edge[i][0],edge[i][1]);
+        edge_abi[i][2] = i;
+    }
+
+    std::sort(edge_abi.begin(), edge_abi.end(), 
+    [](const vector<int>& a, const vector<int>& b)
+    {
+        return a[0]<b[0];
+    });
+}
+
+void init_adjacent_edge()
+{
+    if (should_load_adjacent_edge)
+    {
+        printf("load adjacent edge!\n");
+        loadtxt(proj_dir_path+"/data/misc/adjacent_edge.txt",adjacent_edge);
+        return;
+    }
+
+
+
+    tic();
+    adjacent_edge.resize(NE);
+
+    int maxsize=0;
+    for(int i=0; i<NE; i++)
+    {
+        int a=edge[i][0];
+        int b=edge[i][1];
+        for(int j=i+1; j < NE; j++)
+        {
+            if(j==i)
+                continue;
+        
+            int a1=edge[j][0];
+            int b1=edge[j][1];
+            if(a==a1||a==b1||b==a1||b==b1)
+            {
+                adjacent_edge[i].push_back(j);
+                adjacent_edge[j].push_back(i);
+            }
+            if(adjacent_edge[i].size()>maxsize)
+            {
+                maxsize=adjacent_edge[i].size();
+            }
+        }
+    }
+    toc("adjacent");
+    printf("maxsize = %d\n", maxsize);
+
+
+    // //get adjacent edges with shared vertex a
+    // std::sort(edge_abi.begin(), edge_abi.end(), 
+    // [](const vector<int>& a, const vector<int>& b)
+    // {
+    //     return a[0]<b[0];
+    // });
+
+    // for (int k = 0; k < NE-1; k++)
+    // {
+    //     int a = edge_abi[k][0];
+    //     int b = edge_abi[k][1];
+    //     int i = edge_abi[k][2];
+
+    //     int a2 = edge_abi[k+1][0];
+    //     int b2 = edge_abi[k+1][1];
+    //     int i2 = edge_abi[k+1][2];
+
+    //     if (a==a2)
+    //     {
+    //         adjacent_edge[i].push_back(i2);
+    //         adjacent_edge[i2].push_back(i);
+    //     }
+    //     k++;
+    // }
+    
+    // //get adjacent edges with shared vertex b
+    // std::sort(edge_abi.begin(), edge_abi.end(), 
+    // [](const vector<int>& a, const vector<int>& b)
+    // {
+    //     return a[1]<b[1];
+    // });
+
+    // for (int k = 0; k < NE-1; k++)
+    // {
+    //     int a = edge_abi[k][0];
+    //     int b = edge_abi[k][1];
+    //     int i = edge_abi[k][2];
+
+    //     int a2 = edge_abi[k+1][0];
+    //     int b2 = edge_abi[k+1][1];
+    //     int i2 = edge_abi[k+1][2];
+
+    //     if (b==b2)
+    //     {
+    //         adjacent_edge[i].push_back(i2);
+    //         adjacent_edge[i2].push_back(i);
+    //     }
+    // }
+}
+
+
 
 void reset_lagrangian()
 {
@@ -634,6 +780,30 @@ void fill_b()
         b[i] = -constraints[i] - alpha * lagrangian[i];
     }
 }
+
+void fill_A()
+{
+    typedef Eigen::Triplet<float> T;
+
+    std::vector<T> val;
+    val.reserve(12*NE);
+    for (int i = 0; i < NE; i++)
+    {
+        //fill diagonal:m1 + m2 + alpha
+        int idx0 = edge[i][0];
+        int idx1 = edge[i][1];
+        float invM0 = inv_mass[idx0];
+        float invM1 = inv_mass[idx1];
+        float diag = (invM0 + invM1 + alpha);
+        val.push_back(T(i, i, diag));
+
+        //fill off-diagonal
+
+    }
+    A.setFromTriplets(val.begin(), val.end());
+    A.makeCompressed();
+}
+
 
 /*
  * Perform one iteration of Gauss-Seidel relaxation on the linear
@@ -951,8 +1121,9 @@ void initialization()
     fill_M_inv();
     fill_ALPHA();
     init_v2e();
-    // savetxt("v2e.txt", v2e);
-    // savetxt("edge.txt", edge);
+    init_edge_abi();
+    init_adjacent_edge();
+    // savetxt("adjacent_edge.txt", adjacent_edge);
     // exit(0);
     
     t_init.end();

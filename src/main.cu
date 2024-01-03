@@ -249,16 +249,35 @@ void copy_pos_to_pos_vis()
     }
 }
 
-// void savetxt(string filename, Field3f &field)
-// {
-//     ofstream myfile;
-//     myfile.open(filename);
-//     for (int i = 0; i < field.size(); i++)
-//     {
-//         myfile << field[i][0] << " " << field[i][1] << " " << field[i][2] << endl;
-//     }
-//     myfile.close();
-// }
+void savetxt(string filename, FieldXi &field)
+{
+    ofstream myfile;
+    myfile.open(filename);
+    for(auto &i:field)
+    {
+        for(auto &ii:i)
+        {
+            myfile << ii << " ";
+        }
+        myfile << endl;
+    }
+    myfile.close();
+}
+
+void savetxt(string filename, Field2i &field)
+{
+    ofstream myfile;
+    myfile.open(filename);
+    for(auto &i:field)
+    {
+        for(auto &ii:i)
+        {
+            myfile << ii << " ";
+        }
+        myfile << endl;
+    }
+    myfile.close();
+}
 
 void savetxt(string filename, Field1f &field)
 {
@@ -449,10 +468,6 @@ void init_v2e()
         remove_duplicate(v2e[idx0]);
         remove_duplicate(v2e[idx1]);
 
-        // sort( v2e[idx0].begin(), v2e[idx0].end() );
-        // v2e[idx0].erase( unique( v2e[idx0].begin(), v2e[idx0].end() ), v2e[idx0].end() );
-        // sort( v2e[idx1].begin(), v2e[idx1].end() );
-        // v2e[idx1].erase( unique( v2e[idx1].begin(), v2e[idx1].end() ), v2e[idx1].end() );
     }
 }
 
@@ -937,6 +952,8 @@ void initialization()
     fill_ALPHA();
     init_v2e();
     // savetxt("v2e.txt", v2e);
+    // savetxt("edge.txt", edge);
+    // exit(0);
     
     t_init.end();
 }

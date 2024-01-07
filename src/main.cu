@@ -49,12 +49,13 @@ const float omega = 0.5; // under-relaxing factor
 std::string proj_dir_path;
 unsigned num_particles = 0;
 unsigned frame_num = 0;
-unsigned end_frame = 1000;
+constexpr unsigned end_frame = 1000;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
 string solver_type = "GS";
 bool should_load_adjacent_edge=true;
+float dual_residual[end_frame+1]={0.0};
 
 // typedefs
 using Vec3f = Eigen::Vector3f;
@@ -179,12 +180,12 @@ public:
         if (unit == "ms")
         {
             std::chrono::duration<double, std::milli> elapsed = m_end - m_start;
-            printf("%s(%s timer): %.0f(ms)\n", msg.c_str(), name.c_str(), elapsed.count());
+            printf("%s(%s): %.0f(ms)\n", msg.c_str(), name.c_str(), elapsed.count());
         }
         else if (unit == "s")
         {
             std::chrono::duration<double> elapsed = m_end - m_start;
-            printf("%s(%s timer): %.0f(s)\n", msg.c_str(), name.c_str(), elapsed.count());
+            printf("%s(%s): %.0f(s)\n", msg.c_str(), name.c_str(), elapsed.count());
         }
     }
     inline void reset()
@@ -779,8 +780,9 @@ void fill_gradC_triplets()
     G.makeCompressed();
 }
 
-void fill_b()
+void fill_b(int iter)
 {
+    dual_residual[iter] = 0.0;
     for (int i = 0; i < NE; i++)
     {
         int idx0 = edge[i][0];
@@ -788,7 +790,9 @@ void fill_b()
         Vec3f dis = pos[idx0] - pos[idx1];
         constraints[i] = length(dis) - rest_len[i];
         b[i] = -constraints[i] - alpha * lagrangian[i];
+        dual_residual[iter] += b[i] * b[i];
     }
+    dual_residual[iter] = sqrt(dual_residual[iter]);
 }
 
 void fill_A()
@@ -969,26 +973,26 @@ void incre_lagrangian()
 //     }
 // }
 
-void transfer_back_to_pos_matrix()
-{
-    // transfer back to pos
-    for (int i = 0; i < NE; i++)
-    {
-        lagrangian[i] += dLambda[i];
-    }
+// void transfer_back_to_pos_matrix()
+// {
+//     // transfer back to pos
+//     for (int i = 0; i < NE; i++)
+//     {
+//         lagrangian[i] += dLambda[i];
+//     }
 
-    Eigen::Map<Eigen::VectorXf> dLambda_eigen(dLambda.data(), dLambda.size());
+//     Eigen::Map<Eigen::VectorXf> dLambda_eigen(dLambda.data(), dLambda.size());
 
-    Eigen::VectorXf dpos_ = M_inv * G.transpose() * dLambda_eigen;
+//     Eigen::VectorXf dpos_ = M_inv * G.transpose() * dLambda_eigen;
 
-    // add dpos to pos
-    for (int i = 0; i < num_particles; i++)
-    {
-        pos[i] = pos_mid[i] + Vec3f(dpos_[3 * i], dpos_[3 * i + 1], dpos_[3 * i + 2]);
-    }
-}
+//     // add dpos to pos
+//     for (int i = 0; i < num_particles; i++)
+//     {
+//         pos[i] = pos_mid[i] + Vec3f(dpos_[3 * i], dpos_[3 * i + 1], dpos_[3 * i + 2]);
+//     }
+// }
 
-void transfer_back_to_pos_mfree(const Field1f &dLambda, const Field23f &gradC)
+void transfer_back_to_pos_mfree()
 {
     reset_accpos();
 
@@ -999,7 +1003,8 @@ void transfer_back_to_pos_mfree(const Field1f &dLambda, const Field23f &gradC)
         float invM0 = inv_mass[idx0];
         float invM1 = inv_mass[idx1];
         float delta_lagrangian = dLambda[i];
-        Vec3f gradient = gradC[i][0];
+        Vec3f dis = pos[idx0] - pos[idx1];
+        Vec3f gradient = normalize(dis);
         lagrangian[i] += delta_lagrangian;
         if (invM0 != 0.0)
         {
@@ -1033,14 +1038,18 @@ void substep_all_solver()
         t_iter.start();
         printf("iter = %d", iter);
 
+        
         // assemble A and b
-        // compute_C_and_gradC();
-        // fill_gradC_triplets();
-        // G.makeCompressed();
-        // A =  G * M_inv * G.transpose();
-        // fill_A_add_alpha();
-        fill_A();
-        fill_b();
+        compute_C_and_gradC();
+        fill_gradC_triplets();
+        G.makeCompressed();
+        A =  G * M_inv * G.transpose();
+        fill_A_add_alpha();
+
+        // fill_A();
+
+        fill_b(iter); //fill b  and calc dual residual
+        // printf(" dual_residual = %f\n", dual_residual[iter]);
 
         // solve Ax=b
         if (solver_type == "GS")
@@ -1055,9 +1064,7 @@ void substep_all_solver()
             }
         }
 
-        transfer_back_to_pos_mfree(dLambda, gradC);
-        std::fill(dLambda.begin(), dLambda.end(), 0.0);
-        std::fill(acc_pos.begin(), acc_pos.end(), Vec3f(0.0, 0.0, 0.0));
+        transfer_back_to_pos_mfree();
         t_iter.end();
     }
     update_vel();

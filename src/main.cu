@@ -783,6 +783,10 @@ void fill_b()
 {
     for (int i = 0; i < NE; i++)
     {
+        int idx0 = edge[i][0];
+        int idx1 = edge[i][1];
+        Vec3f dis = pos[idx0] - pos[idx1];
+        constraints[i] = length(dis) - rest_len[i];
         b[i] = -constraints[i] - alpha * lagrangian[i];
     }
 }
@@ -1036,9 +1040,6 @@ void substep_all_solver()
         // A =  G * M_inv * G.transpose();
         // fill_A_add_alpha();
         fill_A();
-        // printf("\nsaving A.mtx\n");
-        // Eigen::saveMarket(A, "A-old-0.mtx");
-        // exit(0);
         fill_b();
 
         // solve Ax=b

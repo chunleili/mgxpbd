@@ -780,7 +780,19 @@ void fill_gradC_triplets()
     G.makeCompressed();
 }
 
-void fill_b(int iter)
+void fill_b()
+{
+    for (int i = 0; i < NE; i++)
+    {
+        int idx0 = edge[i][0];
+        int idx1 = edge[i][1];
+        Vec3f dis = pos[idx0] - pos[idx1];
+        constraints[i] = length(dis) - rest_len[i];
+        b[i] = -constraints[i] - alpha * lagrangian[i];
+    }
+}
+
+void calc_dual_residual(int iter)
 {
     dual_residual[iter] = 0.0;
     for (int i = 0; i < NE; i++)
@@ -789,7 +801,6 @@ void fill_b(int iter)
         int idx1 = edge[i][1];
         Vec3f dis = pos[idx0] - pos[idx1];
         constraints[i] = length(dis) - rest_len[i];
-        b[i] = -constraints[i] - alpha * lagrangian[i];
         dual_residual[iter] += b[i] * b[i];
     }
     dual_residual[iter] = sqrt(dual_residual[iter]);
@@ -1040,16 +1051,14 @@ void substep_all_solver()
 
         
         // assemble A and b
-        compute_C_and_gradC();
-        fill_gradC_triplets();
-        G.makeCompressed();
-        A =  G * M_inv * G.transpose();
-        fill_A_add_alpha();
+        // compute_C_and_gradC();
+        // fill_gradC_triplets();
+        // G.makeCompressed();
+        // A =  G * M_inv * G.transpose();
+        // fill_A_add_alpha();
 
-        // fill_A();
-
-        fill_b(iter); //fill b  and calc dual residual
-        // printf(" dual_residual = %f\n", dual_residual[iter]);
+        fill_A();
+        fill_b();
 
         // solve Ax=b
         if (solver_type == "GS")
@@ -1065,6 +1074,10 @@ void substep_all_solver()
         }
 
         transfer_back_to_pos_mfree();
+
+        calc_dual_residual(iter);
+        printf(" dual_residual = %f\n", dual_residual[iter]);
+
         t_iter.end();
     }
     update_vel();

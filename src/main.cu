@@ -806,6 +806,90 @@ void calc_dual_residual(int iter)
     dual_residual[iter] = sqrt(dual_residual[iter]);
 }
 
+
+
+void fill_A_cuda()
+{
+    typedef Eigen::Triplet<float> T;
+
+    std::vector<T> val;
+    val.reserve(12*NE);
+
+    // add one to each vertex
+    parallel_for<<<NE / 128, 128>>>(num_particles, 
+    [val = val.data()] __device__ (int i) 
+    {
+        //fill diagonal:m1 + m2 + alpha
+        int ii0 = edge[i][0];
+        int ii1 = edge[i][1];
+        float invM0 = inv_mass[ii0];
+        float invM1 = inv_mass[ii1];
+        float diag = (invM0 + invM1 + alpha);
+        val.push_back(T(i, i, diag));
+
+        //fill off-diagonal: m_a*dot(g_ab,g_ab)
+        vector<int> adj = adjacent_edge[i];
+        for (int j = 0; j < adj.size(); j++)
+        {
+            int adj_edge_idx = adj[j];
+            if(adj_edge_idx==i)
+            {
+                printf("%d self!\n",adj_edge_idx);
+                continue;
+            }
+
+            int jj0 = edge[adj_edge_idx][0];
+            int jj1 = edge[adj_edge_idx][1];
+
+            // a is shared vertex 
+            // a-b is the first edge, a-c is the second edge
+            int a=-1,b=-1,c=-1;
+            if(ii0==jj0)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj1;
+            }
+            else if(ii0==jj1)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj0;
+            }
+            else if(ii1==jj0)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj1;
+            }
+            else if(ii1==jj1)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj0;
+            }
+            else
+            {
+                printf("%d no shared vertex!\n",adj_edge_idx);
+                continue;
+            }
+            
+            
+            // m_a*dot(g_ab,g_ab)
+            Vec3f g_ab = normalize(pos[a] - pos[b]);
+            Vec3f g_ac = normalize(pos[a] - pos[c]);
+            float off_diag = inv_mass[a] * dot(g_ab, g_ac);
+
+            val.push_back(T(i, adj_edge_idx, off_diag));
+        }
+    });
+    checkCudaErrors(cudaDeviceSynchronize());
+  
+    A.setFromTriplets(val.begin(), val.end());
+    A.makeCompressed();
+}
+
+
 void fill_A()
 {
     typedef Eigen::Triplet<float> T;

@@ -1228,17 +1228,36 @@ void run_simulation()
     t_sim.end();
 }
 
+void test_omp()
+{
+    std::cout << "number of available processors: " << omp_get_num_procs()
+              << std::endl;
+    std::cout << "number of threads: " << omp_get_max_threads() << std::endl;
+    auto n = 1000000000LL;
+    std::cout << "we will form sum of numbers from 1 to " << n << std::endl;
+    // start timer
+    auto t0 = omp_get_wtime();
+    auto s = 0LL;
+#pragma omp parallel for reduction(+ : s)
+    for (auto i = 1; i <= n; i++)
+    {
+        s += i;
+    }
+    // stop timer
+    auto t1 = omp_get_wtime();
+    std::cout << "sum: " << s << std::endl;
+    std::cout << "elapsed wall clock time: " << t1 - t0 << " seconds" << std::endl;
+}
+
 int main(int argc, char *argv[])
 {
     t_main.start();
 
-    // igl::readOBJ(proj_dir_path + "/data/models/cloth.obj", pos_vis, tri);
-    // num_particles = pos_vis.rows();
-    num_particles = NV;
-    printf("num_particles = %d\n", num_particles);
+    test_omp();
 
-    run_simulation();
+    // num_particles = NV;
+    // printf("num_particles = %d\n", num_particles);
+    // run_simulation();
 
-    // copy_pos_to_pos_vis();
     t_main.end("", "s");
 }

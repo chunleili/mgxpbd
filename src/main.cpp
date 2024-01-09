@@ -1042,6 +1042,67 @@ void update_constraints()
     }
 }
 
+void solve_amg_my()
+{
+    float tol = 1e-3;
+    int maxiter = 1;
+
+    Eigen::SparseMatrix<float> A2 = R * A * P;
+
+    Eigen::VectorXf x = Eigen::VectorXf::Zero(M);
+    Eigen::VectorXf b = Eigen::VectorXf::Zero(M);
+    Eigen::VectorXf residual = Eigen::VectorXf::Zero(M);
+    Eigen::VectorXf x0 = Eigen::VectorXf::Zero(M);
+    Eigen::VectorXf coarse_b = Eigen::VectorXf::Zero(M);
+    Eigen::VectorXf coarse_x = Eigen::VectorXf::Zero(M);
+
+    x = x0;
+
+    float normb = b.norm();
+    if (normb == 0.0)
+    {
+        normb = 1.0;
+    }
+    float normr = (b - A * x).norm();
+
+    int it=0;
+    while(true)
+    {
+        residual = b - A * x;
+
+        coarse_b = R * residual; // restriction
+
+        coarse_x = Eigen::VectorXf::Zero(M);
+
+        // coarse_x = A2.colPivHouseholderQr().solve(coarse_b); // coarse grid correction
+        Eigen::SparseLU<Eigen::SparseMatrix> solver;
+        solver.analyzePattern(A2);
+        solver.factorize(A2);
+        coarse_x = solver.solve(coarse_b);
+
+        x += P * coarse_x; // coarse grid correction
+
+        gauss_seidel(A.outerIndexPtr(), A.outerSize(),
+                    A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(),
+                    x.data(), x.size(), b.data(), b.size(), 0, M, 1);
+
+        it += 1;
+
+        normr = (b - A * x).norm();
+        if (normr < tol * normb)
+        {
+            return;
+        }
+        if (it == maxiter)
+        {
+            return;
+        }
+
+    }
+
+}
+
+
 void substep_all_solver()
 {
     printf("\n\n----frame_num:%d----\n", frame_num);

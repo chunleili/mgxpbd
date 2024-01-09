@@ -12,13 +12,13 @@
 #include <algorithm>
 #include <unordered_set>
 
-#include <cuda_runtime.h>
-#include <thrust/universal_vector.h>
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include "helper_cuda.h"
-#include "helper_math.h"
-#include "helper_timer.h"
+// #include <cuda_runtime.h>
+// #include <thrust/universal_vector.h>
+// #include <thrust/host_vector.h>
+// #include <thrust/device_vector.h>
+// #include "helper_cuda.h"
+// #include "helper_math.h"
+// #include "helper_timer.h"
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -137,25 +137,25 @@ std::string get_proj_dir_path()
 // this code run before main, in case of user forget to call get_proj_dir_path()
 static string proj_dir_path_pre_get = get_proj_dir_path();
 
-/** @brief A parallel for loop. It should be used with a lambda function.
- * Learn from https://github.com/parallel101/course/blob/2d30da61b442008c003f69225e6feca20a4ca7df/08/06_thrust/01/main.cu
- * Usage:
- * // add one to each vertex
- * parallel_for<<<num_particles / 512, 128>>>(num_particles, [pos = pos.data()] __device__ (int i) {
- *    pos[i].y += 1.0;
- * });
- * checkCudaErrors(cudaDeviceSynchronize());
- *
- */
-template <typename Func>
-__global__ void parallel_for(int n, Func func)
-{
-    for (int i = blockDim.x * blockIdx.x + threadIdx.x;
-         i < n; i += blockDim.x * gridDim.x)
-    {
-        func(i);
-    }
-}
+// /** @brief A parallel for loop. It should be used with a lambda function.
+//  * Learn from https://github.com/parallel101/course/blob/2d30da61b442008c003f69225e6feca20a4ca7df/08/06_thrust/01/main.cu
+//  * Usage:
+//  * // add one to each vertex
+//  * parallel_for<<<num_particles / 512, 128>>>(num_particles, [pos = pos.data()] __device__ (int i) {
+//  *    pos[i].y += 1.0;
+//  * });
+//  * checkCudaErrors(cudaDeviceSynchronize());
+//  *
+//  */
+// template <typename Func>
+// __global__ void parallel_for(int n, Func func)
+// {
+//     for (int i = blockDim.x * blockIdx.x + threadIdx.x;
+//          i < n; i += blockDim.x * gridDim.x)
+//     {
+//         func(i);
+//     }
+// }
 
 /// @brief Usage: Timer t("timer_name");
 ///               t.start();
@@ -201,39 +201,39 @@ Timer t_sim("sim"), t_main("main"), t_substep("substep"), t_init("init"), t_iter
 ///               t.start();
 ///               //do something
 ///               t.end();
-class SdkTimer
-{
-private:
-    StopWatchInterface *m_timer = NULL;
+// class SdkTimer
+// {
+// private:
+//     StopWatchInterface *m_timer = NULL;
 
-public:
-    std::string name = "";
-    SdkTimer(std::string name_ = "") : name(name_)
-    {
-        sdkCreateTimer(&m_timer);
-    }
-    SdkTimer::~SdkTimer()
-    {
-        sdkDeleteTimer(&m_timer);
-    }
+// public:
+//     std::string name = "";
+//     SdkTimer(std::string name_ = "") : name(name_)
+//     {
+//         sdkCreateTimer(&m_timer);
+//     }
+//     SdkTimer::~SdkTimer()
+//     {
+//         sdkDeleteTimer(&m_timer);
+//     }
 
-    inline void start()
-    {
-        sdkStartTimer(&m_timer);
-    }
+//     inline void start()
+//     {
+//         sdkStartTimer(&m_timer);
+//     }
 
-    inline void end()
-    {
-        sdkStopTimer(&m_timer);
-        printf("%s time elapsed: %.4f(ms)\n", name.c_str(), sdkGetTimerValue(&m_timer));
-        sdkResetTimer(&m_timer);
-    };
+//     inline void end()
+//     {
+//         sdkStopTimer(&m_timer);
+//         printf("%s time elapsed: %.4f(ms)\n", name.c_str(), sdkGetTimerValue(&m_timer));
+//         sdkResetTimer(&m_timer);
+//     };
 
-    inline void reset()
-    {
-        sdkResetTimer(&m_timer);
-    };
-};
+//     inline void reset()
+//     {
+//         sdkResetTimer(&m_timer);
+//     };
+// };
 
 // caution: the tic toc cannot be nested
 inline void tic()
@@ -798,89 +798,6 @@ void calc_dual_residual(int iter)
     }
     dual_residual[iter] = std::sqrt(dual_residual[iter]);
 }
-
-// the bug of fill_A_cuda is not fix yet
-// void fill_A_cuda()
-// {
-//     typedef Eigen::Triplet<float> T;
-
-//     std::vector<T> val;
-//     val.reserve(12*NE);
-
-//     // add one to each vertex
-//     parallel_for<<<NE / 128, 128>>>(num_particles, 
-//     [val = val.data()] __device__ (int i) 
-//     {
-//         //fill diagonal:m1 + m2 + alpha
-//         int ii0 = edge[i][0];
-//         int ii1 = edge[i][1];
-//         float invM0 = inv_mass[ii0];
-//         float invM1 = inv_mass[ii1];
-//         float diag = (invM0 + invM1 + alpha);
-//         val.push_back(T(i, i, diag));
-
-//         //fill off-diagonal: m_a*dot(g_ab,g_ab)
-//         vector<int> adj = adjacent_edge[i];
-//         for (int j = 0; j < adj.size(); j++)
-//         {
-//             int adj_edge_idx = adj[j];
-//             if(adj_edge_idx==i)
-//             {
-//                 printf("%d self!\n",adj_edge_idx);
-//                 continue;
-//             }
-
-//             int jj0 = edge[adj_edge_idx][0];
-//             int jj1 = edge[adj_edge_idx][1];
-
-//             // a is shared vertex 
-//             // a-b is the first edge, a-c is the second edge
-//             int a=-1,b=-1,c=-1;
-//             if(ii0==jj0)
-//             {
-//                 a=ii0;
-//                 b=ii1;
-//                 c=jj1;
-//             }
-//             else if(ii0==jj1)
-//             {
-//                 a=ii0;
-//                 b=ii1;
-//                 c=jj0;
-//             }
-//             else if(ii1==jj0)
-//             {
-//                 a=ii1;
-//                 b=ii0;
-//                 c=jj1;
-//             }
-//             else if(ii1==jj1)
-//             {
-//                 a=ii1;
-//                 b=ii0;
-//                 c=jj0;
-//             }
-//             else
-//             {
-//                 printf("%d no shared vertex!\n",adj_edge_idx);
-//                 continue;
-//             }
-            
-            
-//             // m_a*dot(g_ab,g_ab)
-//             Vec3f g_ab = normalize(pos[a] - pos[b]);
-//             Vec3f g_ac = normalize(pos[a] - pos[c]);
-//             float off_diag = inv_mass[a] * dot(g_ab, g_ac);
-
-//             val.push_back(T(i, adj_edge_idx, off_diag));
-//         }
-//     });
-//     checkCudaErrors(cudaDeviceSynchronize());
-  
-//     A.setFromTriplets(val.begin(), val.end());
-//     A.makeCompressed();
-// }
-
 
 void fill_A()
 {

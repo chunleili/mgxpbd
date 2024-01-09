@@ -800,86 +800,86 @@ void calc_dual_residual(int iter)
 }
 
 // the bug of fill_A_cuda is not fix yet
-// void fill_A_cuda()
-// {
-//     typedef Eigen::Triplet<float> T;
+void fill_A_cuda()
+{
+    A.reserve(Eigen::VectorXf::Constant(M, 15));
 
-//     std::vector<T> val;
-//     val.reserve(12*NE);
+    thrust::device_vector<Vec2i> d_edge(edge.begin(), edge.end());
+    printf("d_edge.size() = %d\n", d_edge.size());
+    printf("d_edge[0] = %d %d\n", d_edge[0], d_edge[1]);
 
-//     // add one to each vertex
-//     parallel_for<<<NE / 128, 128>>>(num_particles, 
-//     [val = val.data()] __device__ (int i) 
-//     {
-//         //fill diagonal:m1 + m2 + alpha
-//         int ii0 = edge[i][0];
-//         int ii1 = edge[i][1];
-//         float invM0 = inv_mass[ii0];
-//         float invM1 = inv_mass[ii1];
-//         float diag = (invM0 + invM1 + alpha);
-//         val.push_back(T(i, i, diag));
+    // add one to each vertex
+    parallel_for<<<NE / 256, 256>>>(NE, 
+    [] __device__ (int i) 
+    {
+        //fill diagonal:m1 + m2 + alpha
+        // int ii0 = edge[i][0];
+        // int ii1 = edge[i][1];
+        // float invM0 = inv_mass[ii0];
+        // float invM1 = inv_mass[ii1];
+        // float diag = (invM0 + invM1 + alpha);
+        // A.insert(i,i) = diag;
 
-//         //fill off-diagonal: m_a*dot(g_ab,g_ab)
-//         vector<int> adj = adjacent_edge[i];
-//         for (int j = 0; j < adj.size(); j++)
-//         {
-//             int adj_edge_idx = adj[j];
-//             if(adj_edge_idx==i)
-//             {
-//                 printf("%d self!\n",adj_edge_idx);
-//                 continue;
-//             }
+        // //fill off-diagonal: m_a*dot(g_ab,g_ab)
+        // vector<int> adj = adjacent_edge[i];
+        // for (int j = 0; j < adj.size(); j++)
+        // {
+        //     int adj_edge_idx = adj[j];
+        //     if(adj_edge_idx==i)
+        //     {
+        //         printf("%d self!\n",adj_edge_idx);
+        //         continue;
+        //     }
 
-//             int jj0 = edge[adj_edge_idx][0];
-//             int jj1 = edge[adj_edge_idx][1];
+        //     int jj0 = edge[adj_edge_idx][0];
+        //     int jj1 = edge[adj_edge_idx][1];
 
-//             // a is shared vertex 
-//             // a-b is the first edge, a-c is the second edge
-//             int a=-1,b=-1,c=-1;
-//             if(ii0==jj0)
-//             {
-//                 a=ii0;
-//                 b=ii1;
-//                 c=jj1;
-//             }
-//             else if(ii0==jj1)
-//             {
-//                 a=ii0;
-//                 b=ii1;
-//                 c=jj0;
-//             }
-//             else if(ii1==jj0)
-//             {
-//                 a=ii1;
-//                 b=ii0;
-//                 c=jj1;
-//             }
-//             else if(ii1==jj1)
-//             {
-//                 a=ii1;
-//                 b=ii0;
-//                 c=jj0;
-//             }
-//             else
-//             {
-//                 printf("%d no shared vertex!\n",adj_edge_idx);
-//                 continue;
-//             }
+        //     // a is shared vertex 
+        //     // a-b is the first edge, a-c is the second edge
+        //     int a=-1,b=-1,c=-1;
+        //     if(ii0==jj0)
+        //     {
+        //         a=ii0;
+        //         b=ii1;
+        //         c=jj1;
+        //     }
+        //     else if(ii0==jj1)
+        //     {
+        //         a=ii0;
+        //         b=ii1;
+        //         c=jj0;
+        //     }
+        //     else if(ii1==jj0)
+        //     {
+        //         a=ii1;
+        //         b=ii0;
+        //         c=jj1;
+        //     }
+        //     else if(ii1==jj1)
+        //     {
+        //         a=ii1;
+        //         b=ii0;
+        //         c=jj0;
+        //     }
+        //     else
+        //     {
+        //         printf("%d no shared vertex!\n",adj_edge_idx);
+        //         continue;
+        //     }
             
             
-//             // m_a*dot(g_ab,g_ab)
-//             Vec3f g_ab = normalize(pos[a] - pos[b]);
-//             Vec3f g_ac = normalize(pos[a] - pos[c]);
-//             float off_diag = inv_mass[a] * dot(g_ab, g_ac);
+        //     // m_a*dot(g_ab,g_ab)
+        //     Vec3f g_ab = normalize(pos[a] - pos[b]);
+        //     Vec3f g_ac = normalize(pos[a] - pos[c]);
+        //     float off_diag = inv_mass[a] * dot(g_ab, g_ac);
 
-//             val.push_back(T(i, adj_edge_idx, off_diag));
-//         }
-//     });
-//     checkCudaErrors(cudaDeviceSynchronize());
+        //     A.insert(i,adj_edge_idx) = off_diag;
+        // }
+    });
+    checkCudaErrors(cudaDeviceSynchronize());
   
-//     A.setFromTriplets(val.begin(), val.end());
-//     A.makeCompressed();
-// }
+    A.makeCompressed();
+}
 
 
 void fill_A_by_insert()
@@ -1230,7 +1230,10 @@ void substep_all_solver()
         // A =  G * M_inv * G.transpose();
         // fill_A_add_alpha();
 
-        fill_A();
+        // fill_A();
+
+        fill_A_cuda();
+        exit(0);
 
         update_constraints();
         fill_b();   //-C-alpha*lagrangian

@@ -784,10 +784,6 @@ void fill_b()
 {
     for (int i = 0; i < NE; i++)
     {
-        int idx0 = edge[i][0];
-        int idx1 = edge[i][1];
-        Vec3f dis = pos[idx0] - pos[idx1];
-        constraints[i] = length(dis) - rest_len[i];
         b[i] = -constraints[i] - alpha * lagrangian[i];
     }
 }
@@ -797,13 +793,10 @@ void calc_dual_residual(int iter)
     dual_residual[iter] = 0.0;
     for (int i = 0; i < NE; i++)
     {
-        int idx0 = edge[i][0];
-        int idx1 = edge[i][1];
-        Vec3f dis = pos[idx0] - pos[idx1];
-        constraints[i] = length(dis) - rest_len[i];
-        dual_residual[iter] += b[i] * b[i];
+        float r = -constraints[i] - alpha * lagrangian[i];
+        dual_residual[iter] += r*r;
     }
-    dual_residual[iter] = sqrt(dual_residual[iter]);
+    dual_residual[iter] = std::sqrt(dual_residual[iter]);
 }
 
 void fill_A()
@@ -1038,6 +1031,16 @@ void fill_A_add_alpha()
     }
 }
 
+void update_constraints()
+{
+    for (int i = 0; i < NE; i++)
+    {
+        int idx0 = edge[i][0];
+        int idx1 = edge[i][1];
+        Vec3f dis = pos[idx0] - pos[idx1];
+        constraints[i] = length(dis) - rest_len[i];
+    }
+}
 
 void substep_all_solver()
 {
@@ -1058,7 +1061,9 @@ void substep_all_solver()
         // fill_A_add_alpha();
 
         fill_A();
-        fill_b();
+
+        update_constraints();
+        fill_b();   //-C-alpha*lagrangian
 
         // solve Ax=b
         if (solver_type == "GS")

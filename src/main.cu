@@ -805,34 +805,55 @@ void fill_A_cuda()
     A.reserve(Eigen::VectorXf::Constant(M, 15));
 
     thrust::device_vector<Vec2i> d_edge(edge.begin(), edge.end());
-    printf("d_edge.size() = %d\n", d_edge.size());
-    printf("d_edge[0] = %d %d\n", d_edge[0], d_edge[1]);
+    thrust::device_vector<Vec3f> d_pos(pos.begin(), pos.end());
+    thrust::device_vector<float> d_inv_mass(inv_mass.begin(), inv_mass.end());
+    
+    for(int i=0;i<5;i++)
+    {
+        // cout<<"d_inv_mass["<<i<<"] = "<<d_inv_mass[i]<<endl;
+        // cout<<"d_pos["<<i<<"] = "<<d_pos[i]<<endl;
+        cout<<"d_edge["<<i<<"] = "<<static_cast<Vec2i>(d_edge[i])[1]<<endl;
+        // decltype(d_edge[i]) a;
+        // std::cout << typeid(a).name();
+    }
+
+    // thrust::host_vector<Vec2i> h_edge = d_edge;
+    // thrust::host_vector<Vec3f> h_pos = d_pos;
+    // cout<<"h_edge["<<0<<"] = "<<h_edge[0][1]<<endl;
+    // cout<<"h_pos["<<0<<"] = "<<h_pos[0][1]<<endl;
+
 
     // add one to each vertex
     parallel_for<<<NE / 256, 256>>>(NE, 
-    [] __device__ (int i) 
+    [
+        edge = d_edge.data(),
+        inv_mass = d_inv_mass.data(),
+        alpha = alpha
+    ] __device__ (int i) 
     {
         //fill diagonal:m1 + m2 + alpha
-        // int ii0 = edge[i][0];
-        // int ii1 = edge[i][1];
-        // float invM0 = inv_mass[ii0];
-        // float invM1 = inv_mass[ii1];
-        // float diag = (invM0 + invM1 + alpha);
+        int ii0 = static_cast<Vec2i>(edge[i])[0];
+        int ii1 = static_cast<Vec2i>(edge[i])[1];
+        // if (i==0)
+        //     printf("ii0 = %d, ii1 = %d\n",ii0,ii1);
+        float invM0 = inv_mass[ii0];
+        float invM1 = inv_mass[ii1];
+        float diag = (invM0 + invM1 + alpha);
         // A.insert(i,i) = diag;
 
         // //fill off-diagonal: m_a*dot(g_ab,g_ab)
         // vector<int> adj = adjacent_edge[i];
         // for (int j = 0; j < adj.size(); j++)
         // {
-        //     int adj_edge_idx = adj[j];
-        //     if(adj_edge_idx==i)
+        //     int ia = adj[j];
+        //     if(ia==i)
         //     {
-        //         printf("%d self!\n",adj_edge_idx);
+        //         printf("%d self!\n",ia);
         //         continue;
         //     }
 
-        //     int jj0 = edge[adj_edge_idx][0];
-        //     int jj1 = edge[adj_edge_idx][1];
+        //     int jj0 = edge[ia][0];
+        //     int jj1 = edge[ia][1];
 
         //     // a is shared vertex 
         //     // a-b is the first edge, a-c is the second edge
@@ -863,7 +884,7 @@ void fill_A_cuda()
         //     }
         //     else
         //     {
-        //         printf("%d no shared vertex!\n",adj_edge_idx);
+        //         printf("%d no shared vertex!\n",ia);
         //         continue;
         //     }
             
@@ -873,7 +894,7 @@ void fill_A_cuda()
         //     Vec3f g_ac = normalize(pos[a] - pos[c]);
         //     float off_diag = inv_mass[a] * dot(g_ab, g_ac);
 
-        //     A.insert(i,adj_edge_idx) = off_diag;
+        //     A.insert(i,ia) = off_diag;
         // }
     });
     checkCudaErrors(cudaDeviceSynchronize());
@@ -906,15 +927,15 @@ void fill_A_by_insert()
         vector<int> adj = adjacent_edge[i];
         for (int j = 0; j < adj.size(); j++)
         {
-            int adj_edge_idx = adj[j];
-            if(adj_edge_idx==i)
+            int ia = adj[j];
+            if(ia==i)
             {
-                printf("%d self!\n",adj_edge_idx);
+                printf("%d self!\n",ia);
                 continue;
             }
 
-            int jj0 = edge[adj_edge_idx][0];
-            int jj1 = edge[adj_edge_idx][1];
+            int jj0 = edge[ia][0];
+            int jj1 = edge[ia][1];
 
             // a is shared vertex 
             // a-b is the first edge, a-c is the second edge
@@ -945,7 +966,7 @@ void fill_A_by_insert()
             }
             else
             {
-                printf("%d no shared vertex!\n",adj_edge_idx);
+                printf("%d no shared vertex!\n",ia);
                 continue;
             }
             
@@ -955,9 +976,9 @@ void fill_A_by_insert()
             Vec3f g_ac = normalize(pos[a] - pos[c]);
             float off_diag = inv_mass[a] * dot(g_ab, g_ac);
 
-            // val.push_back(T(i, adj_edge_idx, off_diag));
-            A.insert(i,adj_edge_idx) = off_diag;
-            // A.coeffRef(i,adj_edge_idx) = off_diag;
+            // val.push_back(T(i, ia, off_diag));
+            A.insert(i,ia) = off_diag;
+            // A.coeffRef(i,ia) = off_diag;
         }
 
     }
@@ -1220,10 +1241,9 @@ void substep_all_solver()
     for (int iter = 0; iter <= max_iter; iter++)
     {
         t_iter.start();
-        printf("iter = %d", iter);
+        printf("iter = %d ", iter);
 
-        
-        // assemble A and b
+        // // assemble A and b
         // compute_C_and_gradC();
         // fill_gradC_triplets();
         // G.makeCompressed();
@@ -1231,7 +1251,6 @@ void substep_all_solver()
         // fill_A_add_alpha();
 
         // fill_A();
-
         fill_A_cuda();
         exit(0);
 

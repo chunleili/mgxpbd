@@ -55,7 +55,7 @@ constexpr unsigned end_frame = 1000;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
-string solver_type = "GS";
+string solver_type = "AMG";
 bool should_load_adjacent_edge=true;
 float dual_residual[end_frame+1]={0.0};
 
@@ -84,9 +84,8 @@ Field3f pos_mid;
 Field3f acc_pos;
 Field3f old_pos;
 Field23f gradC;
-Field1f b(M);
-// Field1f dpos(3*NV);
-Field1f dLambda(M);
+// Field1f b(M);
+// Field1f dLambda(M);
 FieldXi v2e; // vertex to edges
 FieldXi adjacent_edge; //give a edge idx, get all its neighbor edges
 FieldXi edge_abi; //(a,b,i): vertex a, vertex b, edge i. (a<b)
@@ -100,7 +99,8 @@ Eigen::SparseMatrix<float> M_inv(3 * NV, 3 * NV);
 Eigen::SparseMatrix<float> ALPHA(M, M);
 Eigen::SparseMatrix<float> A(M, M);
 Eigen::SparseMatrix<float> G(M, 3 * NV);
-// Eigen::VectorXf dpos(3*NV);
+Eigen::VectorXf b(M);
+Eigen::VectorXf dLambda(M);
 
 // utility functions
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64)
@@ -891,12 +891,12 @@ void calc_dual_residual(int iter)
 
 void fill_A()
 {
-    // std::vector<Triplet> val;
-    // val.reserve(15*NE);
+    std::vector<Triplet> val;
+    val.reserve(15*NE);
 
     A.reserve(Eigen::VectorXf::Constant(M, 15));
 
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (int i = 0; i < NE; i++)
     {   
         //fill diagonal:m1 + m2 + alpha
@@ -905,9 +905,9 @@ void fill_A()
         float invM0 = inv_mass[ii0];
         float invM1 = inv_mass[ii1];
         float diag = (invM0 + invM1 + alpha);
-        // val.push_back(Triplet(i, i, diag));
+        val.push_back(Triplet(i, i, diag));
         // A.insert(i,i) = diag;
-        A.coeffRef(i,i) = diag;
+        // A.coeffRef(i,i) = diag;
 
         //fill off-diagonal: m_a*dot(g_ab,g_ab)
         vector<int> adj = adjacent_edge[i];
@@ -962,13 +962,13 @@ void fill_A()
             Vec3f g_ac = normalize(pos[a] - pos[c]);
             float off_diag = inv_mass[a] * dot(g_ab, g_ac);
 
-            // val.push_back(Triplet(i, ia, off_diag));
+            val.push_back(Triplet(i, ia, off_diag));
             // A.insert(i,ia) = off_diag;
-            A.coeffRef(i,ia) = off_diag;
+            // A.coeffRef(i,ia) = off_diag;
         }
 
     }
-    // A.setFromTriplets(val.begin(), val.end());
+    A.setFromTriplets(val.begin(), val.end());
     A.makeCompressed();
 }
 
@@ -1047,7 +1047,7 @@ void gauss_seidel(const I Ap[], const int Ap_size,
 }
 
 // An easy-to-use wrapper for gauss_seidel
-void easy_gauss_seidel(const SpMat &A_=A, const Field1f &b_=b, Field1f &x_=dLambda)
+void easy_gauss_seidel(const SpMat &A_=A, const VectorXf &b_=b, VectorXf &x_=dLambda)
 {
     int max_GS_iter = 1;
     std::fill(x_.begin(), x_.end(), 0.0);
@@ -1135,14 +1135,13 @@ void fill_A_by_spmm()
 }
 
 
-void solve_amg(const SpMat& A, const Field1f& b_=b, Field1f &x_=dLambda)
+void solve_amg(const SpMat& A_=A, const VectorXf& b_=b, VectorXf &x_=dLambda)
 {
     float tol = 1e-3;
     int amg_max_iter = 1;
 
-    SpMat A2 = R * A * P;
+    SpMat A2 = R * A_ * P;
 
-    std::fill(x_.begin(), x_.end(), 0.0);
     Eigen::VectorXf residual = Eigen::VectorXf::Zero(M);
     Eigen::VectorXf coarse_b = Eigen::VectorXf::Zero(M);
     Eigen::VectorXf coarse_x = Eigen::VectorXf::Zero(M);
@@ -1150,15 +1149,15 @@ void solve_amg(const SpMat& A, const Field1f& b_=b, Field1f &x_=dLambda)
     float normb = b_.norm();
     if (normb == 0.0) 
         normb = 1.0;
-    float normr = (b_ - A * x_).norm();
+    float normr = (b_ - A_ * x_).norm();
     for(int iter=0; iter < amg_max_iter && normr < tol * normb; iter++)
     {
-        residual = b_ - A * x_;
+        residual = b_ - A_ * x_;
         coarse_b = R * residual; // restriction
-        coarse_x.setZero(M)
-        solve_gauss_seidel(A2, coarse_b, coarse_x); 
-        x_ += P * coarse_x; // coarse grid correction
-        normr = (b_ - A * x_).norm();
+        coarse_x.setZero(M);
+        easy_gauss_seidel(A2, coarse_b, coarse_x); 
+        x_ = P * coarse_x; // prolongation
+        normr = (b_ - A_ * x_).norm();
     }
 }
 
@@ -1181,6 +1180,10 @@ void substep_all_solver()
         if (solver_type == "GS")
         {
             easy_gauss_seidel();
+        }
+        else if (solver_type == "AMG")
+        {
+            solve_amg();
         }
 
         transfer_back_to_pos_mfree();
@@ -1239,9 +1242,8 @@ void resize_fields()
     tri.resize(3 * NT, 0);
     gradC.resize(NE, array<Vec3f, 2>{Vec3f(0.0, 0.0, 0.0), Vec3f(0.0, 0.0, 0.0)});
 
-    // dpos.resize(3 * NV, 0.0);
-    dLambda.resize(M, 0.0);
-    b.resize(M, 0.0);
+    dLambda.resize(M);
+    b.resize(M);
 
     tri_vis.resize(NT, 3);
     pos_vis.resize(num_particles, 3);
@@ -1336,13 +1338,10 @@ int main(int argc, char *argv[])
 {
     t_main.start();
 
-    // igl::readOBJ(proj_dir_path + "/data/models/cloth.obj", pos_vis, tri);
-    // num_particles = pos_vis.rows();
     num_particles = NV;
     printf("num_particles = %d\n", num_particles);
 
     run_simulation();
-
-    // copy_pos_to_pos_vis();
+    
     t_main.end("", "s");
 }

@@ -55,7 +55,7 @@ constexpr unsigned end_frame = 1000;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
-string solver_type = "AMG";
+string solver_type = "GS";
 bool should_load_adjacent_edge=true;
 float dual_residual[end_frame+1]={0.0};
 
@@ -89,6 +89,9 @@ Field23f gradC;
 FieldXi v2e; // vertex to edges
 FieldXi adjacent_edge; //give a edge idx, get all its neighbor edges
 FieldXi edge_abi; //(a,b,i): vertex a, vertex b, edge i. (a<b)
+// vector<vector<Vec3i>> adjacent_edge_abc; //give a edge idx, get all its neighbor edges in a b c order, where a is the shared vertex
+FieldXi adjacent_edge_abc; //give a edge idx, get all its neighbor edges in a b c order, where a is the shared vertex
+Field1i num_adjacent_edge; //give a edge idx, get the number of its neighbor edges
 
 // we have to use pos_vis for visualization because libigl uses Eigen::MatrixXd
 Eigen::MatrixXd pos_vis;
@@ -101,6 +104,14 @@ Eigen::SparseMatrix<float> A(M, M);
 Eigen::SparseMatrix<float> G(M, 3 * NV);
 Eigen::VectorXf b(M);
 Eigen::VectorXf dLambda(M);
+
+// manually sparse matrix
+vector<int> csr_row_start;
+vector<int> csr_col_idx;
+vector<float> csr_val;
+vector<int> coo_i_arr;
+vector<int> coo_j_arr;
+vector<float> coo_v_arr;
 
 // utility functions
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64)
@@ -291,12 +302,23 @@ void savetxt(string filename, Field2i &field)
     myfile.close();
 }
 
-void savetxt(string filename, Field1f &field)
-{
-    Eigen::Map<Eigen::VectorXf> v(field.data(), field.size());
-    Eigen::saveMarket(v, filename);
-}
+// void savetxt(string filename, Field1f &field)
+// {
+//     Eigen::Map<Eigen::VectorXf> v(field.data(), field.size());
+//     Eigen::saveMarket(v, filename);
+// }
 
+template<typename T=Field1i>
+void savetxt(string filename, T &field)
+{
+    ofstream myfile;
+    myfile.open(filename);
+    for(auto &i:field)
+    {
+        myfile << i << '\n';
+    }
+    myfile.close();
+}
 
 
 void loadtxt(std::string filename, FieldXi &M)
@@ -640,6 +662,94 @@ void init_adjacent_edge()
 }
 
 
+// input an edge index, output all its adjacent edges in a b c order, 
+// where a is the shared vertex, b is another vertex on this edge, c is another vertex on the adjacent edge
+//
+// Example: input 0,  output: 1 0 2 0 1 257...
+// where 1 0 2 is the first adjacent edge pair, 0 1 257 is the second adjacent edge pair, etc.
+//
+// Usage:
+// for (int i = 0; i < NE; i++)
+//     for (int j = 0; j < num_adjacent_edge; j++)
+//     {
+//         int a = adjacent_edge_abc[i][j * 3];
+//         int b = adjacent_edge_abc[i][j * 3 + 1];
+//         int c = adjacent_edge_abc[i][j * 3 + 2];
+//     }
+void init_adjacent_edge_abc()
+{
+    adjacent_edge_abc.resize(NE);
+    // #pragma omp parallel for
+    for (int i = 0; i < NE; i++)
+    {   
+        int ii0 = edge[i][0];
+        int ii1 = edge[i][1];
+
+        vector<int> adj = adjacent_edge[i];
+        int num_adj = adj.size();
+        adjacent_edge_abc[i].reserve(num_adj*3);
+        for (int j = 0; j < num_adj; j++)
+        {
+            int ia = adj[j];
+            if(ia==i)
+            {
+                printf("%d self!\n",ia);
+                continue;
+            }
+
+            int jj0 = edge[ia][0];
+            int jj1 = edge[ia][1];
+
+            // a is shared vertex 
+            // a-b is the first edge, a-c is the second edge
+            int a=-1,b=-1,c=-1;
+            if(ii0==jj0)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj1;
+            }
+            else if(ii0==jj1)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj0;
+            }
+            else if(ii1==jj0)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj1;
+            }
+            else if(ii1==jj1)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj0;
+            }
+            else
+            {
+                printf("%d no shared vertex!\n",ia);
+                continue;
+            }
+            
+            adjacent_edge_abc[i].push_back(a);
+            adjacent_edge_abc[i].push_back(b);
+            adjacent_edge_abc[i].push_back(c);
+        }
+
+    }
+}
+
+void init_num_adjacent_edge()
+{
+    num_adjacent_edge.resize(NE);
+    for (int i = 0; i < NE; i++)
+    {
+        num_adjacent_edge[i] = adjacent_edge[i].size();
+    }
+}
+
 
 void reset_lagrangian()
 {
@@ -808,6 +918,57 @@ void calc_dual_residual(int iter)
     }
     dual_residual[iter] = std::sqrt(dual_residual[iter]);
 }
+
+
+void init_A_pattern()
+{
+    std::vector<Triplet> val;
+    val.reserve(15*NE);
+
+    A.reserve(Eigen::VectorXf::Constant(M, 15));
+
+    int cnt_nonzero = 0;
+    csr_row_start.push_back(cnt_nonzero);
+    // #pragma omp parallel for
+    for (int i = 0; i < NE; i++)
+    {   
+        vector<int> adj = adjacent_edge[i];
+
+        //set diagonal
+        float diag = inv_mass[edge[i][0]] + inv_mass[edge[i][1]] + alpha;
+        A.coeffRef(i,i) = diag;
+        
+        cnt_nonzero++;
+
+        coo_i_arr.push_back(i);
+        coo_j_arr.push_back(i);
+        coo_v_arr.push_back(diag);
+
+        csr_col_idx.push_back(i);
+        csr_val.push_back(diag);
+
+        for(int j=0; j < adj.size(); j++)
+        {
+            int ia = adj[j];
+
+            float off_diag = 0.0;
+            A.coeffRef(i,ia) = off_diag;
+
+            cnt_nonzero++;
+
+            coo_i_arr.push_back(i);
+            coo_j_arr.push_back(ia);
+            coo_v_arr.push_back(off_diag);
+
+            csr_col_idx.push_back(ia);
+            csr_val.push_back(off_diag);
+        }
+
+        csr_row_start.push_back(cnt_nonzero);
+    }
+    A.makeCompressed();
+}
+
 
 // // the bug of fill_A_cuda is not fix yet
 // void fill_A_cuda()
@@ -1334,8 +1495,19 @@ void initialization()
     init_v2e();
     init_edge_abi();
     init_adjacent_edge();
+    init_num_adjacent_edge();
+    init_adjacent_edge_abc();
+    init_A_pattern();
     // savetxt("adjacent_edge.txt", adjacent_edge);
-    // exit(0);
+    // savetxt("adjacent_edge_abc.txt", adjacent_edge_abc);
+    // savetxt("edge.txt", edge);
+    savetxt("csr_row_start.txt", csr_row_start);
+    savetxt("csr_col_idx.txt", csr_col_idx);
+    savetxt("csr_val.txt", csr_val);
+    savetxt("coo_i_arr.txt", coo_i_arr);
+    savetxt("coo_j_arr.txt", coo_j_arr);
+    savetxt("coo_v_arr.txt", coo_v_arr);
+    exit(0);
     
     t_init.end();
 }

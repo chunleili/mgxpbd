@@ -922,6 +922,27 @@ void calc_dual_residual(int iter)
 
 void init_A_pattern()
 {
+    A.reserve(Eigen::VectorXf::Constant(M, 15));
+
+    // #pragma omp parallel for
+    for (int i = 0; i < NE; i++)
+    {   
+        vector<int> adj = adjacent_edge[i];
+        float diag = inv_mass[edge[i][0]] + inv_mass[edge[i][1]] + alpha;
+        A.coeffRef(i,i) = diag;
+        for(int j=0; j < adj.size(); j++)
+        {
+            int ia = adj[j];
+            float off_diag = 0.0;
+            A.coeffRef(i,ia) = off_diag;
+        }
+    }
+    A.makeCompressed();
+}
+
+
+void init_A_pattern_and_csr_coo_arr()
+{
     std::vector<Triplet> val;
     val.reserve(15*NE);
 
@@ -1064,7 +1085,8 @@ void init_A_pattern()
 // }
 
 
-void fill_A()
+// legacy code without warm start(init_A_pattern)
+void fill_A_no_warm_start()
 {
     std::vector<Triplet> val;
     val.reserve(15*NE);
@@ -1147,6 +1169,32 @@ void fill_A()
     A.makeCompressed();
 }
 
+
+//with warm start(init_A_pattern)
+void fill_A()
+{
+    // #pragma omp parallel for
+    for (int i = 0; i < NE; i++)
+    {   
+        //fill off-diagonal: m_a*dot(g_ab,g_ab)
+        vector<int> adj = adjacent_edge[i];
+        for (int j = 0; j < adj.size(); j++)
+        {
+            int ia = adj[j];
+            int a = adjacent_edge_abc[i][j * 3];
+            int b = adjacent_edge_abc[i][j * 3 + 1];
+            int c = adjacent_edge_abc[i][j * 3 + 2];
+            
+            // m_a*dot(g_ab,g_ab)
+            Vec3f g_ab = normalize(pos[a] - pos[b]);
+            Vec3f g_ac = normalize(pos[a] - pos[c]);
+            float off_diag = inv_mass[a] * dot(g_ab, g_ac);
+
+            A.coeffRef(i,ia) = off_diag;
+        }
+    }
+    // A.makeCompressed();
+}
 
 /*
  * Perform one iteration of Gauss-Seidel relaxation on the linear
@@ -1501,13 +1549,13 @@ void initialization()
     // savetxt("adjacent_edge.txt", adjacent_edge);
     // savetxt("adjacent_edge_abc.txt", adjacent_edge_abc);
     // savetxt("edge.txt", edge);
-    savetxt("csr_row_start.txt", csr_row_start);
-    savetxt("csr_col_idx.txt", csr_col_idx);
-    savetxt("csr_val.txt", csr_val);
-    savetxt("coo_i_arr.txt", coo_i_arr);
-    savetxt("coo_j_arr.txt", coo_j_arr);
-    savetxt("coo_v_arr.txt", coo_v_arr);
-    exit(0);
+    // savetxt("csr_row_start.txt", csr_row_start);
+    // savetxt("csr_col_idx.txt", csr_col_idx);
+    // savetxt("csr_val.txt", csr_val);
+    // savetxt("coo_i_arr.txt", coo_i_arr);
+    // savetxt("coo_j_arr.txt", coo_j_arr);
+    // savetxt("coo_v_arr.txt", coo_v_arr);
+    // exit(0);
     
     t_init.end();
 }

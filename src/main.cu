@@ -32,6 +32,8 @@ using Eigen::Map;
 using Eigen::Vector2i;
 using Eigen::Vector3f;
 using Eigen::VectorXf;
+using SpMat = Eigen::SparseMatrix<float>;
+using Triplet = Eigen::Triplet<float>;
 
 // constants
 const int N = 256;
@@ -716,12 +718,10 @@ void substep_xpbd()
 
 void fill_M_inv()
 {
-    typedef Eigen::Triplet<float> T;
-
-    std::vector<T> inv_mass_3(3 * NV);
+    std::vector<Triplet> inv_mass_3(3 * NV);
     for (int i = 0; i < 3 * NV; i++)
     {
-        inv_mass_3[i] = T(i, i, inv_mass[int(i / 3)]);
+        inv_mass_3[i] = Triplet(i, i, inv_mass[int(i / 3)]);
     }
     M_inv.setFromTriplets(inv_mass_3.begin(), inv_mass_3.end());
     M_inv.makeCompressed();
@@ -729,12 +729,10 @@ void fill_M_inv()
 
 void fill_ALPHA()
 {
-    typedef Eigen::Triplet<float> T;
-
-    std::vector<T> alpha_(NE);
+    std::vector<Triplet> alpha_(NE);
     for (int i = 0; i < NE; i++)
     {
-        alpha_[i] = T(i, i, alpha);
+        alpha_[i] = Triplet(i, i, alpha);
     }
     ALPHA.setFromTriplets(alpha_.begin(), alpha_.end());
     ALPHA.makeCompressed();
@@ -757,9 +755,7 @@ void compute_C_and_gradC()
 
 void fill_gradC_triplets()
 {
-    typedef Eigen::Triplet<float> T;
-
-    std::vector<T> gradC_triplets;
+    std::vector<Triplet> gradC_triplets;
     gradC_triplets.reserve(6 * NE);
     int cnt = 0;
     for (int j = 0; j < NE; j++)
@@ -770,7 +766,7 @@ void fill_gradC_triplets()
             for (int d = 0; d < 3; d++)
             {
                 int pid = ind[p];
-                gradC_triplets.push_back(T(j, 3 * pid + d, gradC[j][p][d]));
+                gradC_triplets.push_back(Triplet(j, 3 * pid + d, gradC[j][p][d]));
                 cnt++;
             }
         }
@@ -895,9 +891,9 @@ void calc_dual_residual(int iter)
 
 void fill_A()
 {
-    // typedef Eigen::Triplet<float> T;
-    // std::vector<T> val;
+    // std::vector<Triplet> val;
     // val.reserve(15*NE);
+
     A.reserve(Eigen::VectorXf::Constant(M, 15));
 
     #pragma omp parallel for
@@ -909,7 +905,7 @@ void fill_A()
         float invM0 = inv_mass[ii0];
         float invM1 = inv_mass[ii1];
         float diag = (invM0 + invM1 + alpha);
-        // val.push_back(T(i, i, diag));
+        // val.push_back(Triplet(i, i, diag));
         // A.insert(i,i) = diag;
         A.coeffRef(i,i) = diag;
 
@@ -966,7 +962,7 @@ void fill_A()
             Vec3f g_ac = normalize(pos[a] - pos[c]);
             float off_diag = inv_mass[a] * dot(g_ab, g_ac);
 
-            // val.push_back(T(i, ia, off_diag));
+            // val.push_back(Triplet(i, ia, off_diag));
             // A.insert(i,ia) = off_diag;
             A.coeffRef(i,ia) = off_diag;
         }
@@ -1050,11 +1046,16 @@ void gauss_seidel(const I Ap[], const int Ap_size,
     }
 }
 
-void incre_lagrangian()
+// An easy-to-use wrapper for gauss_seidel
+void solve_gauss_seidel(const SpMat &A_=A, const Field1f &b_=b, Field1f &x_=dLambda)
 {
-    for (int i = 0; i < NE; i++)
+    int max_GS_iter = 1;
+    std::fill(x_.begin(), x_.end(), 0.0);
+    for (int GS_iter = 0; GS_iter < max_GS_iter; GS_iter++)
     {
-        lagrangian[i] += dLambda[i];
+        gauss_seidel<int, float, float>(A_.outerIndexPtr(), A_.outerSize(),
+                                        A_.innerIndexPtr(), A_.innerSize(), A_.valuePtr(), A_.nonZeros(),
+                                        x_.data(), x_.size(), b_.data(), b_.size(), 0, b_.size(), 1);
     }
 }
 
@@ -1133,9 +1134,62 @@ void fill_A_by_spmm()
     fill_A_add_alpha();
 }
 
+
+// void solve_amg_my()
+// {
+//     float tol = 1e-3;
+//     int maxiter = 1;
+
+//     Eigen::SparseMatrix<float> A2 = R * A * P;
+
+//     Eigen::VectorXf x = Eigen::VectorXf::Zero(M);
+//     Eigen::VectorXf b = Eigen::VectorXf::Zero(M);
+//     Eigen::VectorXf residual = Eigen::VectorXf::Zero(M);
+//     Eigen::VectorXf x0 = Eigen::VectorXf::Zero(M);
+//     Eigen::VectorXf coarse_b = Eigen::VectorXf::Zero(M);
+//     Eigen::VectorXf coarse_x = Eigen::VectorXf::Zero(M);
+
+//     x = x0;
+
+//     float normb = b.norm();
+//     if (normb == 0.0)
+//     {
+//         normb = 1.0;
+//     }
+//     float normr = (b - A * x).norm();
+
+//     int it=0;
+//     while(true)
+//     {
+//         residual = b - A * x;
+
+//         coarse_b = R * residual; // restriction
+
+//         coarse_x = Eigen::VectorXf::Zero(M);
+
+
+//         x += P * coarse_x; // coarse grid correction
+
+//         gauss_seidel(A.outerIndexPtr(), A.outerSize(),
+//                     A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(),
+//                     x.data(), x.size(), b.data(), b.size(), 0, M, 1);
+
+//         it += 1;
+
+//         normr = (b - A * x).norm();
+//         if (normr < tol * normb)
+//         {
+//             return;
+//         }
+//         if (it == maxiter)
+//         {
+//             return;
+//         }
+//     }
+// }
+
 void substep_all_solver()
 {
-    printf("\n\n----frame_num:%d----\n", frame_num);
     semi_euler();
     reset_lagrangian();
     for (int iter = 0; iter <= max_iter; iter++)
@@ -1152,14 +1206,7 @@ void substep_all_solver()
         // solve Ax=b
         if (solver_type == "GS")
         {
-            int max_GS_iter = 1;
-            std::fill(dLambda.begin(), dLambda.end(), 0.0);
-            for (int GS_iter = 0; GS_iter < max_GS_iter; GS_iter++)
-            {
-                gauss_seidel<int, float, float>(A.outerIndexPtr(), A.outerSize(),
-                                                A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(),
-                                                dLambda.data(), dLambda.size(), b.data(), b.size(), 0, M, 1);
-            }
+            solve_gauss_seidel();
         }
 
         transfer_back_to_pos_mfree();
@@ -1176,8 +1223,7 @@ void main_loop()
 {
     for (frame_num = 0; frame_num <= end_frame; frame_num++)
     {
-        printf("---------\n");
-        printf("frame_num = %d\n", frame_num);
+        printf("\n\n----frame_num:%d----\n", frame_num);
 
         t_substep.start();
         // substep_xpbd();

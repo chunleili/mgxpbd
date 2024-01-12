@@ -1159,6 +1159,8 @@ void solve_amg(const SpMat& A_=A, const VectorXf& b_=b, VectorXf &x_=dLambda)
     Eigen::VectorXf residual = Eigen::VectorXf::Zero(M);
     Eigen::VectorXf coarse_b = Eigen::VectorXf::Zero(M);
     Eigen::VectorXf coarse_x = Eigen::VectorXf::Zero(M);
+    
+    std::fill(x_.begin(), x_.end(), 0.0);
 
     float normb = b_.norm();
     if (normb == 0.0) 

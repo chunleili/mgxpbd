@@ -422,6 +422,20 @@ void remove_duplicate(std::vector<int> &vec)
     sort( vec.begin(), vec.end() );
 }
 
+void clean_results_dir()
+{
+    std::string path = proj_dir_path + "/results/";
+
+    for (const auto& entry : std::filesystem::directory_iterator(path)) 
+    {
+        if (entry.path().extension() == ".obj")
+        {
+            std::filesystem::remove(entry.path());
+        }
+    }
+
+    std::cout<<"clean results dir done!"<<endl;
+}
 
 /* -------------------------------------------------------------------------- */
 /*                            simulation functions                            */
@@ -1337,6 +1351,8 @@ void run_simulation()
 int main(int argc, char *argv[])
 {
     t_main.start();
+
+    clean_results_dir();
 
     num_particles = NV;
     printf("num_particles = %d\n", num_particles);

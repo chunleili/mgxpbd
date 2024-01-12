@@ -1047,7 +1047,7 @@ void gauss_seidel(const I Ap[], const int Ap_size,
 }
 
 // An easy-to-use wrapper for gauss_seidel
-void solve_gauss_seidel(const SpMat &A_=A, const Field1f &b_=b, Field1f &x_=dLambda)
+void easy_gauss_seidel(const SpMat &A_=A, const Field1f &b_=b, Field1f &x_=dLambda)
 {
     int max_GS_iter = 1;
     std::fill(x_.begin(), x_.end(), 0.0);
@@ -1135,58 +1135,32 @@ void fill_A_by_spmm()
 }
 
 
-// void solve_amg_my()
-// {
-//     float tol = 1e-3;
-//     int maxiter = 1;
+void solve_amg(const SpMat& A, const Field1f& b_=b, Field1f &x_=dLambda)
+{
+    float tol = 1e-3;
+    int amg_max_iter = 1;
 
-//     Eigen::SparseMatrix<float> A2 = R * A * P;
+    SpMat A2 = R * A * P;
 
-//     Eigen::VectorXf x = Eigen::VectorXf::Zero(M);
-//     Eigen::VectorXf b = Eigen::VectorXf::Zero(M);
-//     Eigen::VectorXf residual = Eigen::VectorXf::Zero(M);
-//     Eigen::VectorXf x0 = Eigen::VectorXf::Zero(M);
-//     Eigen::VectorXf coarse_b = Eigen::VectorXf::Zero(M);
-//     Eigen::VectorXf coarse_x = Eigen::VectorXf::Zero(M);
+    std::fill(x_.begin(), x_.end(), 0.0);
+    Eigen::VectorXf residual = Eigen::VectorXf::Zero(M);
+    Eigen::VectorXf coarse_b = Eigen::VectorXf::Zero(M);
+    Eigen::VectorXf coarse_x = Eigen::VectorXf::Zero(M);
 
-//     x = x0;
-
-//     float normb = b.norm();
-//     if (normb == 0.0)
-//     {
-//         normb = 1.0;
-//     }
-//     float normr = (b - A * x).norm();
-
-//     int it=0;
-//     while(true)
-//     {
-//         residual = b - A * x;
-
-//         coarse_b = R * residual; // restriction
-
-//         coarse_x = Eigen::VectorXf::Zero(M);
-
-
-//         x += P * coarse_x; // coarse grid correction
-
-//         gauss_seidel(A.outerIndexPtr(), A.outerSize(),
-//                     A.innerIndexPtr(), A.innerSize(), A.valuePtr(), A.nonZeros(),
-//                     x.data(), x.size(), b.data(), b.size(), 0, M, 1);
-
-//         it += 1;
-
-//         normr = (b - A * x).norm();
-//         if (normr < tol * normb)
-//         {
-//             return;
-//         }
-//         if (it == maxiter)
-//         {
-//             return;
-//         }
-//     }
-// }
+    float normb = b_.norm();
+    if (normb == 0.0) 
+        normb = 1.0;
+    float normr = (b_ - A * x_).norm();
+    for(int iter=0; iter < amg_max_iter && normr < tol * normb; iter++)
+    {
+        residual = b_ - A * x_;
+        coarse_b = R * residual; // restriction
+        coarse_x.setZero(M)
+        solve_gauss_seidel(A2, coarse_b, coarse_x); 
+        x_ += P * coarse_x; // coarse grid correction
+        normr = (b_ - A * x_).norm();
+    }
+}
 
 void substep_all_solver()
 {
@@ -1206,7 +1180,7 @@ void substep_all_solver()
         // solve Ax=b
         if (solver_type == "GS")
         {
-            solve_gauss_seidel();
+            easy_gauss_seidel();
         }
 
         transfer_back_to_pos_mfree();

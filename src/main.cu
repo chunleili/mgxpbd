@@ -799,108 +799,92 @@ void calc_dual_residual(int iter)
     dual_residual[iter] = std::sqrt(dual_residual[iter]);
 }
 
-// the bug of fill_A_cuda is not fix yet
-void fill_A_cuda()
-{
-    A.reserve(Eigen::VectorXf::Constant(M, 15));
+// // the bug of fill_A_cuda is not fix yet
+// void fill_A_cuda()
+// {
+//     A.reserve(Eigen::VectorXf::Constant(M, 15));
 
-    thrust::device_vector<Vec2i> d_edge(edge.begin(), edge.end());
-    thrust::device_vector<Vec3f> d_pos(pos.begin(), pos.end());
-    thrust::device_vector<float> d_inv_mass(inv_mass.begin(), inv_mass.end());
-    
-    for(int i=0;i<5;i++)
-    {
-        // cout<<"d_inv_mass["<<i<<"] = "<<d_inv_mass[i]<<endl;
-        // cout<<"d_pos["<<i<<"] = "<<d_pos[i]<<endl;
-        cout<<"d_edge["<<i<<"] = "<<static_cast<Vec2i>(d_edge[i])[1]<<endl;
-        // decltype(d_edge[i]) a;
-        // std::cout << typeid(a).name();
-    }
+//     thrust::device_vector<Vec2i> d_edge(edge.begin(), edge.end());
+//     thrust::device_vector<Vec3f> d_pos(pos.begin(), pos.end());
+//     thrust::device_vector<float> d_inv_mass(inv_mass.begin(), inv_mass.end());
 
-    // thrust::host_vector<Vec2i> h_edge = d_edge;
-    // thrust::host_vector<Vec3f> h_pos = d_pos;
-    // cout<<"h_edge["<<0<<"] = "<<h_edge[0][1]<<endl;
-    // cout<<"h_pos["<<0<<"] = "<<h_pos[0][1]<<endl;
+//     // add one to each vertex
+//     parallel_for<<<NE / 256, 256>>>(NE, 
+//     [
+//         edge = d_edge.data(),
+//         inv_mass = d_inv_mass.data(),
+//         alpha = alpha
+//     ] __device__ (int i) 
+//     {
+//         //fill diagonal:m1 + m2 + alpha
+//         int ii0 = static_cast<Vec2i>(edge[i])[0];
+//         int ii1 = static_cast<Vec2i>(edge[i])[1];
+//         // if (i==0)
+//         //     printf("ii0 = %d, ii1 = %d\n",ii0,ii1);
+//         float invM0 = inv_mass[ii0];
+//         float invM1 = inv_mass[ii1];
+//         float diag = (invM0 + invM1 + alpha);
+//         A.insert(i,i) = diag;
 
+//         //fill off-diagonal: m_a*dot(g_ab,g_ab)
+//         vector<int> adj = adjacent_edge[i];
+//         for (int j = 0; j < adj.size(); j++)
+//         {
+//             int ia = adj[j];
+//             if(ia==i)
+//             {
+//                 printf("%d self!\n",ia);
+//                 continue;
+//             }
 
-    // add one to each vertex
-    parallel_for<<<NE / 256, 256>>>(NE, 
-    [
-        edge = d_edge.data(),
-        inv_mass = d_inv_mass.data(),
-        alpha = alpha
-    ] __device__ (int i) 
-    {
-        //fill diagonal:m1 + m2 + alpha
-        int ii0 = static_cast<Vec2i>(edge[i])[0];
-        int ii1 = static_cast<Vec2i>(edge[i])[1];
-        // if (i==0)
-        //     printf("ii0 = %d, ii1 = %d\n",ii0,ii1);
-        float invM0 = inv_mass[ii0];
-        float invM1 = inv_mass[ii1];
-        float diag = (invM0 + invM1 + alpha);
-        // A.insert(i,i) = diag;
+//             int jj0 = edge[ia][0];
+//             int jj1 = edge[ia][1];
 
-        // //fill off-diagonal: m_a*dot(g_ab,g_ab)
-        // vector<int> adj = adjacent_edge[i];
-        // for (int j = 0; j < adj.size(); j++)
-        // {
-        //     int ia = adj[j];
-        //     if(ia==i)
-        //     {
-        //         printf("%d self!\n",ia);
-        //         continue;
-        //     }
-
-        //     int jj0 = edge[ia][0];
-        //     int jj1 = edge[ia][1];
-
-        //     // a is shared vertex 
-        //     // a-b is the first edge, a-c is the second edge
-        //     int a=-1,b=-1,c=-1;
-        //     if(ii0==jj0)
-        //     {
-        //         a=ii0;
-        //         b=ii1;
-        //         c=jj1;
-        //     }
-        //     else if(ii0==jj1)
-        //     {
-        //         a=ii0;
-        //         b=ii1;
-        //         c=jj0;
-        //     }
-        //     else if(ii1==jj0)
-        //     {
-        //         a=ii1;
-        //         b=ii0;
-        //         c=jj1;
-        //     }
-        //     else if(ii1==jj1)
-        //     {
-        //         a=ii1;
-        //         b=ii0;
-        //         c=jj0;
-        //     }
-        //     else
-        //     {
-        //         printf("%d no shared vertex!\n",ia);
-        //         continue;
-        //     }
+//             // a is shared vertex 
+//             // a-b is the first edge, a-c is the second edge
+//             int a=-1,b=-1,c=-1;
+//             if(ii0==jj0)
+//             {
+//                 a=ii0;
+//                 b=ii1;
+//                 c=jj1;
+//             }
+//             else if(ii0==jj1)
+//             {
+//                 a=ii0;
+//                 b=ii1;
+//                 c=jj0;
+//             }
+//             else if(ii1==jj0)
+//             {
+//                 a=ii1;
+//                 b=ii0;
+//                 c=jj1;
+//             }
+//             else if(ii1==jj1)
+//             {
+//                 a=ii1;
+//                 b=ii0;
+//                 c=jj0;
+//             }
+//             else
+//             {
+//                 printf("%d no shared vertex!\n",ia);
+//                 continue;
+//             }
             
             
-        //     // m_a*dot(g_ab,g_ab)
-        //     Vec3f g_ab = normalize(pos[a] - pos[b]);
-        //     Vec3f g_ac = normalize(pos[a] - pos[c]);
-        //     float off_diag = inv_mass[a] * dot(g_ab, g_ac);
+//             // m_a*dot(g_ab,g_ab)
+//             Vec3f g_ab = normalize(pos[a] - pos[b]);
+//             Vec3f g_ac = normalize(pos[a] - pos[c]);
+//             float off_diag = inv_mass[a] * dot(g_ab, g_ac);
 
-        //     A.insert(i,ia) = off_diag;
-        // }
-    });
-    checkCudaErrors(cudaDeviceSynchronize());
-  
-    A.makeCompressed();
-}
+//             A.insert(i,ia) = off_diag;
+//         }
+//     });
+//     checkCudaErrors(cudaDeviceSynchronize());
+//     A.makeCompressed();
+// }
 
 
 void fill_A_by_insert()
@@ -909,7 +893,6 @@ void fill_A_by_insert()
     // std::vector<T> val;
     // val.reserve(15*NE);
     A.reserve(Eigen::VectorXf::Constant(M, 15));
-    tic();
 
     for (int i = 0; i < NE; i++)
     {   
@@ -984,9 +967,343 @@ void fill_A_by_insert()
     }
     // A.setFromTriplets(val.begin(), val.end());
     A.makeCompressed();
+}
 
-    // toc("fill A");
-    // exit(0);
+
+void fill_A_by_coeffRef()
+{
+    // typedef Eigen::Triplet<float> T;
+    // std::vector<T> val;
+    // val.reserve(15*NE);
+    A.reserve(Eigen::VectorXf::Constant(M, 15));
+
+    for (int i = 0; i < NE; i++)
+    {   
+        //fill diagonal:m1 + m2 + alpha
+        int ii0 = edge[i][0];
+        int ii1 = edge[i][1];
+        float invM0 = inv_mass[ii0];
+        float invM1 = inv_mass[ii1];
+        float diag = (invM0 + invM1 + alpha);
+        // val.push_back(T(i, i, diag));
+        // A.insert(i,i) = diag;
+        A.coeffRef(i,i) = diag;
+
+        //fill off-diagonal: m_a*dot(g_ab,g_ab)
+        vector<int> adj = adjacent_edge[i];
+        for (int j = 0; j < adj.size(); j++)
+        {
+            int ia = adj[j];
+            if(ia==i)
+            {
+                printf("%d self!\n",ia);
+                continue;
+            }
+
+            int jj0 = edge[ia][0];
+            int jj1 = edge[ia][1];
+
+            // a is shared vertex 
+            // a-b is the first edge, a-c is the second edge
+            int a=-1,b=-1,c=-1;
+            if(ii0==jj0)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj1;
+            }
+            else if(ii0==jj1)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj0;
+            }
+            else if(ii1==jj0)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj1;
+            }
+            else if(ii1==jj1)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj0;
+            }
+            else
+            {
+                printf("%d no shared vertex!\n",ia);
+                continue;
+            }
+            
+            
+            // m_a*dot(g_ab,g_ab)
+            Vec3f g_ab = normalize(pos[a] - pos[b]);
+            Vec3f g_ac = normalize(pos[a] - pos[c]);
+            float off_diag = inv_mass[a] * dot(g_ab, g_ac);
+
+            // val.push_back(T(i, ia, off_diag));
+            // A.insert(i,ia) = off_diag;
+            A.coeffRef(i,ia) = off_diag;
+        }
+
+    }
+    // A.setFromTriplets(val.begin(), val.end());
+    A.makeCompressed();
+}
+
+
+void fill_A_omp()
+{
+    // typedef Eigen::Triplet<float> T;
+    // std::vector<T> val;
+    // val.reserve(15*NE);
+    A.reserve(Eigen::VectorXf::Constant(M, 15));
+
+    #pragma omp parallel for
+    for (int i = 0; i < NE; i++)
+    {   
+        //fill diagonal:m1 + m2 + alpha
+        int ii0 = edge[i][0];
+        int ii1 = edge[i][1];
+        float invM0 = inv_mass[ii0];
+        float invM1 = inv_mass[ii1];
+        float diag = (invM0 + invM1 + alpha);
+        // val.push_back(T(i, i, diag));
+        A.insert(i,i) = diag;
+        // A.coeffRef(i,i) = diag;
+
+        //fill off-diagonal: m_a*dot(g_ab,g_ab)
+        vector<int> adj = adjacent_edge[i];
+        for (int j = 0; j < adj.size(); j++)
+        {
+            int ia = adj[j];
+            if(ia==i)
+            {
+                printf("%d self!\n",ia);
+                continue;
+            }
+
+            int jj0 = edge[ia][0];
+            int jj1 = edge[ia][1];
+
+            // a is shared vertex 
+            // a-b is the first edge, a-c is the second edge
+            int a=-1,b=-1,c=-1;
+            if(ii0==jj0)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj1;
+            }
+            else if(ii0==jj1)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj0;
+            }
+            else if(ii1==jj0)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj1;
+            }
+            else if(ii1==jj1)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj0;
+            }
+            else
+            {
+                printf("%d no shared vertex!\n",ia);
+                continue;
+            }
+            
+            
+            // m_a*dot(g_ab,g_ab)
+            Vec3f g_ab = normalize(pos[a] - pos[b]);
+            Vec3f g_ac = normalize(pos[a] - pos[c]);
+            float off_diag = inv_mass[a] * dot(g_ab, g_ac);
+
+            // val.push_back(T(i, ia, off_diag));
+            A.insert(i,ia) = off_diag;
+            // A.coeffRef(i,ia) = off_diag;
+        }
+
+    }
+    // A.setFromTriplets(val.begin(), val.end());
+    A.makeCompressed();
+}
+
+
+
+void fill_A_omp_coeffRef()
+{
+    // typedef Eigen::Triplet<float> T;
+    // std::vector<T> val;
+    // val.reserve(15*NE);
+    A.reserve(Eigen::VectorXf::Constant(M, 15));
+
+    #pragma omp parallel for
+    for (int i = 0; i < NE; i++)
+    {   
+        //fill diagonal:m1 + m2 + alpha
+        int ii0 = edge[i][0];
+        int ii1 = edge[i][1];
+        float invM0 = inv_mass[ii0];
+        float invM1 = inv_mass[ii1];
+        float diag = (invM0 + invM1 + alpha);
+        // val.push_back(T(i, i, diag));
+        // A.insert(i,i) = diag;
+        A.coeffRef(i,i) = diag;
+
+        //fill off-diagonal: m_a*dot(g_ab,g_ab)
+        vector<int> adj = adjacent_edge[i];
+        for (int j = 0; j < adj.size(); j++)
+        {
+            int ia = adj[j];
+            if(ia==i)
+            {
+                printf("%d self!\n",ia);
+                continue;
+            }
+
+            int jj0 = edge[ia][0];
+            int jj1 = edge[ia][1];
+
+            // a is shared vertex 
+            // a-b is the first edge, a-c is the second edge
+            int a=-1,b=-1,c=-1;
+            if(ii0==jj0)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj1;
+            }
+            else if(ii0==jj1)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj0;
+            }
+            else if(ii1==jj0)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj1;
+            }
+            else if(ii1==jj1)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj0;
+            }
+            else
+            {
+                printf("%d no shared vertex!\n",ia);
+                continue;
+            }
+            
+            
+            // m_a*dot(g_ab,g_ab)
+            Vec3f g_ab = normalize(pos[a] - pos[b]);
+            Vec3f g_ac = normalize(pos[a] - pos[c]);
+            float off_diag = inv_mass[a] * dot(g_ab, g_ac);
+
+            // val.push_back(T(i, ia, off_diag));
+            // A.insert(i,ia) = off_diag;
+            A.coeffRef(i,ia) = off_diag;
+        }
+
+    }
+    // A.setFromTriplets(val.begin(), val.end());
+    A.makeCompressed();
+}
+
+
+
+void fill_A_omp_triplet()
+{
+    typedef Eigen::Triplet<float> T;
+    std::vector<T> val;
+    val.reserve(15*NE);
+    A.reserve(Eigen::VectorXf::Constant(M, 15));
+
+    #pragma omp parallel for
+    for (int i = 0; i < NE; i++)
+    {   
+        //fill diagonal:m1 + m2 + alpha
+        int ii0 = edge[i][0];
+        int ii1 = edge[i][1];
+        float invM0 = inv_mass[ii0];
+        float invM1 = inv_mass[ii1];
+        float diag = (invM0 + invM1 + alpha);
+        val.push_back(T(i, i, diag));
+        // A.insert(i,i) = diag;
+        // A.coeffRef(i,i) = diag;
+
+        //fill off-diagonal: m_a*dot(g_ab,g_ab)
+        vector<int> adj = adjacent_edge[i];
+        for (int j = 0; j < adj.size(); j++)
+        {
+            int ia = adj[j];
+            if(ia==i)
+            {
+                printf("%d self!\n",ia);
+                continue;
+            }
+
+            int jj0 = edge[ia][0];
+            int jj1 = edge[ia][1];
+
+            // a is shared vertex 
+            // a-b is the first edge, a-c is the second edge
+            int a=-1,b=-1,c=-1;
+            if(ii0==jj0)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj1;
+            }
+            else if(ii0==jj1)
+            {
+                a=ii0;
+                b=ii1;
+                c=jj0;
+            }
+            else if(ii1==jj0)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj1;
+            }
+            else if(ii1==jj1)
+            {
+                a=ii1;
+                b=ii0;
+                c=jj0;
+            }
+            else
+            {
+                printf("%d no shared vertex!\n",ia);
+                continue;
+            }
+            
+            
+            // m_a*dot(g_ab,g_ab)
+            Vec3f g_ab = normalize(pos[a] - pos[b]);
+            Vec3f g_ac = normalize(pos[a] - pos[c]);
+            float off_diag = inv_mass[a] * dot(g_ab, g_ac);
+
+            val.push_back(T(i, ia, off_diag));
+            // A.insert(i,ia) = off_diag;
+            // A.coeffRef(i,ia) = off_diag;
+        }
+
+    }
+    A.setFromTriplets(val.begin(), val.end());
+    A.makeCompressed();
 }
 
 
@@ -1251,7 +1568,30 @@ void substep_all_solver()
         // fill_A_add_alpha();
 
         // fill_A();
-        fill_A_cuda();
+        tic();
+        fill_A_omp();
+        toc("fill_A_omp insert");
+
+        tic();
+        fill_A_by_insert();
+        toc("fill_A insert");
+
+        tic();
+        fill_A();
+        toc("fill_A triplets");
+
+        tic();
+        fill_A_omp_triplet();
+        toc("fill_A_omp_triplet");
+
+        tic();
+        fill_A_omp_coeffRef();
+        toc("fill_A_omp_coeffRef");
+
+        tic();
+        fill_A_by_coeffRef();
+        toc("fill_A_by_coeffRef");
+
         exit(0);
 
         update_constraints();

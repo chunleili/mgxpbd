@@ -27,7 +27,7 @@
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
 
-#define USE_OFF_DIAG 1
+#define USE_OFF_DIAG 0
 
 using namespace std;
 using Eigen::Map;
@@ -63,8 +63,8 @@ float dual_residual[end_frame+1]={0.0};
 
 // typedefs
 using Vec3f = Eigen::Vector3f;
-using Vec2i = Eigen::Vector2i;
-using Vec3i = Eigen::Vector3i;
+using Vec2i = std::array<int, 2>; // using Vec2i = Eigen::Vector2i;
+using Vec3i = std::array<int, 3>; // using Vec3i = Eigen::Vector3i;
 using Field1f = vector<float>;
 using Field3f = vector<Vec3f>;
 using Field3i = vector<Vec3i>;
@@ -1461,16 +1461,16 @@ void load_R_P()
 
 void resize_fields()
 {
-    pos.resize(num_particles, Vector3f::Zero());
-    edge.resize(NE, Vector2i::Zero());
+    pos.resize(num_particles, Vec3f(0.0, 0.0, 0.0));
+    edge.resize(NE);
     rest_len.resize(NE, 0.0);
-    vel.resize(num_particles, Vector3f::Zero());
+    vel.resize(num_particles, Vec3f(0.0, 0.0, 0.0));
     inv_mass.resize(num_particles, 0.0);
     lagrangian.resize(NE, 0.0);
     constraints.resize(NE, 0.0);
-    pos_mid.resize(num_particles, Vector3f::Zero());
-    acc_pos.resize(num_particles, Vector3f::Zero());
-    old_pos.resize(num_particles, Vector3f::Zero());
+    pos_mid.resize(num_particles, Vec3f(0.0, 0.0, 0.0));
+    acc_pos.resize(num_particles, Vec3f(0.0, 0.0, 0.0));
+    old_pos.resize(num_particles, Vec3f(0.0, 0.0, 0.0));
     tri.resize(3 * NT, 0);
     gradC.resize(NE, array<Vec3f, 2>{Vec3f(0.0, 0.0, 0.0), Vec3f(0.0, 0.0, 0.0)});
 

@@ -31,7 +31,6 @@
 
 using namespace std;
 using Eigen::Map;
-using Eigen::Vector2i;
 using Eigen::Vector3f;
 using Eigen::VectorXf;
 using SpMat = Eigen::SparseMatrix<float>;
@@ -57,7 +56,7 @@ constexpr unsigned end_frame = 1000;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
-string solver_type = "GS";
+string solver_type = "JACOBI";
 bool should_load_adjacent_edge=true;
 float dual_residual[end_frame+1]={0.0};
 
@@ -108,12 +107,21 @@ Eigen::VectorXf b(M);
 Eigen::VectorXf dLambda(M);
 
 // manually sparse matrix
-vector<int> csr_row_start;
-vector<int> csr_col_idx;
-vector<float> csr_val;
-vector<int> coo_i_arr;
-vector<int> coo_j_arr;
-vector<float> coo_v_arr;
+struct MySpMat
+{
+    int num_rows;
+    int num_cols;
+    int num_nonzeros;
+    
+    vector<int> csr_row_start;
+    vector<int> csr_col_idx;
+    vector<float> csr_val;
+
+    vector<int> coo_i;
+    vector<int> coo_j;
+    vector<float> coo_v;
+};
+MySpMat my_A;
 
 // utility functions
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64)
@@ -954,7 +962,7 @@ void init_A_pattern_and_csr_coo_arr()
     A.reserve(Eigen::VectorXf::Constant(M, 15));
 
     int cnt_nonzero = 0;
-    csr_row_start.push_back(cnt_nonzero);
+    my_A.csr_row_start.push_back(cnt_nonzero);
     // #pragma omp parallel for
     for (int i = 0; i < NE; i++)
     {   
@@ -966,12 +974,12 @@ void init_A_pattern_and_csr_coo_arr()
         
         cnt_nonzero++;
 
-        coo_i_arr.push_back(i);
-        coo_j_arr.push_back(i);
-        coo_v_arr.push_back(diag);
+        my_A.coo_i.push_back(i);
+        my_A.coo_j.push_back(i);
+        my_A.coo_v.push_back(diag);
 
-        csr_col_idx.push_back(i);
-        csr_val.push_back(diag);
+        my_A.csr_col_idx.push_back(i);
+        my_A.csr_val.push_back(diag);
 
         for(int j=0; j < adj.size(); j++)
         {
@@ -982,15 +990,15 @@ void init_A_pattern_and_csr_coo_arr()
 
             cnt_nonzero++;
 
-            coo_i_arr.push_back(i);
-            coo_j_arr.push_back(ia);
-            coo_v_arr.push_back(off_diag);
+            my_A.coo_i.push_back(i);
+            my_A.coo_j.push_back(ia);
+            my_A.coo_v.push_back(off_diag);
 
-            csr_col_idx.push_back(ia);
-            csr_val.push_back(off_diag);
+            my_A.csr_col_idx.push_back(ia);
+            my_A.csr_val.push_back(off_diag);
         }
 
-        csr_row_start.push_back(cnt_nonzero);
+        my_A.csr_row_start.push_back(cnt_nonzero);
     }
     A.makeCompressed();
 }
@@ -1287,6 +1295,101 @@ void easy_gauss_seidel(const SpMat &A_=A, const VectorXf &b_=b, VectorXf &x_=dLa
     }
 }
 
+/*
+ * Perform one iteration of Jacobi relaxation on the linear
+ * system Ax = b, where A is stored in CSR format and x and b
+ * are column vectors.  Damping is controlled by the omega
+ * parameter.
+ *
+ * Refer to gauss_seidel for additional information regarding
+ * row_start, row_stop, and row_step.
+ *
+ * Parameters
+ * ----------
+ * Ap : array
+ *     CSR row pointer
+ * Aj : array
+ *     CSR index array
+ * Ax : array
+ *     CSR data array
+ * x : array, inplace
+ *     approximate solution
+ * b : array
+ *     right hand side
+ * temp, array
+ *     temporary vector the same size as x
+ * row_start : int
+ *     beginning of the sweep
+ * row_stop : int
+ *     end of the sweep (i.e. one past the last unknown)
+ * row_step : int
+ *     stride used during the sweep (may be negative)
+ * omega : float
+ *     damping parameter
+ *
+ * Returns
+ * -------
+ * Nothing, x will be modified inplace
+ * 
+ * https://github.com/pyamg/pyamg/blob/0431f825d7e6683c208cad20572e92fc0ef230c1/pyamg/amg_core/relaxation.h#L232
+ *
+ */
+template<class I, class T, class F>
+void jacobi(const I Ap[], const int Ap_size,
+            const I Aj[], const int Aj_size,
+            const T Ax[], const int Ax_size,
+                  T  x[], const int  x_size,
+            const T  b[], const int  b_size,
+            const I row_start,
+            const I row_stop,
+            const I row_step,
+            const T omega)
+{
+    T one = 1.0;
+
+    std::vector<T> temp(x_size);
+
+    for(I i = row_start; i != row_stop; i += row_step) {
+        temp[i] = x[i];
+    }
+
+    for(I i = row_start; i != row_stop; i += row_step) {
+        I start = Ap[i];
+        I end   = Ap[i+1];
+        T rsum = 0;
+        T diag = 0;
+
+        for(I jj = start; jj < end; jj++){
+            I j = Aj[jj];
+            if (i == j)
+                diag  = Ax[jj];
+            else
+                rsum += Ax[jj]*temp[j];
+        }
+
+        if (diag != (F) 0.0){
+            x[i] = (one - omega) * temp[i] + omega * ((b[i] - rsum)/diag);
+        }
+    }
+}
+
+// An easy-to-use wrapper for gauss_seidel
+void easy_jacobi(const SpMat &A_=A, const VectorXf &b_=b, VectorXf &x_=dLambda, float omega_=omega)
+{
+    int max_jacobi_iter = 1;
+    std::fill(x_.begin(), x_.end(), 0.0);
+    for (int iter = 0; iter < max_jacobi_iter; iter++)
+    {
+        jacobi<int, float, float>(A_.outerIndexPtr(), A_.outerSize(),
+                                  A_.innerIndexPtr(), A_.innerSize(), 
+                                  A_.valuePtr(), A_.nonZeros(),
+                                  x_.data(), x_.size(),
+                                  b_.data(), b_.size(),
+                                  0, b_.size(), 1, omega_);
+    }
+}
+
+
 // void transfer_back_to_pos_matrix()
 // {
 //     // transfer back to pos
@@ -1416,6 +1519,10 @@ void substep_all_solver()
         else if (solver_type == "AMG")
         {
             solve_amg();
+        }
+        else if (solver_type == "JACOBI")
+        {
+            easy_jacobi();
         }
 
         transfer_back_to_pos_mfree();
@@ -1557,12 +1664,12 @@ void initialization()
     // savetxt("adjacent_edge_abc.txt", adjacent_edge_abc);
     // savetxt("num_adjacent_edge.txt", num_adjacent_edge);
     // savetxt("edge.txt", edge);
-    // savetxt("csr_row_start.txt", csr_row_start);
-    // savetxt("csr_col_idx.txt", csr_col_idx);
-    // savetxt("csr_val.txt", csr_val);
-    // savetxt("coo_i_arr.txt", coo_i_arr);
-    // savetxt("coo_j_arr.txt", coo_j_arr);
-    // savetxt("coo_v_arr.txt", coo_v_arr);
+    // savetxt("my_A.csr_row_start.txt", my_A.csr_row_start);
+    // savetxt("my_A.csr_col_idx.txt", my_A.csr_col_idx);
+    // savetxt("my_A.csr_val.txt", my_A.csr_val);
+    // savetxt("my_A.coo_i_arr.txt", my_A.coo_i_arr);
+    // savetxt("my_A..txt", my_A.);
+    // savetxt("my_A.coo_v.txt", my_A.coo_v);
     // exit(0);
     
     t_init.end();

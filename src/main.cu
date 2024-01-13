@@ -1,5 +1,6 @@
 #define USE_OFF_DIAG 0
 #define USE_LIBIGL 0
+#define USE_CUDA 0
 
 #include <iostream>
 #include <string>
@@ -15,6 +16,7 @@
 #include <algorithm>
 #include <unordered_set>
 
+#if USE_CUDA
 #include <cuda_runtime.h>
 #include <thrust/universal_vector.h>
 #include <thrust/host_vector.h>
@@ -22,6 +24,7 @@
 #include "helper_cuda.h"
 #include "helper_math.h"
 #include "helper_timer.h"
+#endif
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -164,6 +167,7 @@ std::string get_proj_dir_path()
 // this code run before main, in case of user forget to call get_proj_dir_path()
 static string proj_dir_path_pre_get = get_proj_dir_path();
 
+#if USE_CUDA
 /** @brief A parallel for loop. It should be used with a lambda function.
  * Learn from https://github.com/parallel101/course/blob/2d30da61b442008c003f69225e6feca20a4ca7df/08/06_thrust/01/main.cu
  * Usage:
@@ -183,6 +187,7 @@ __global__ void parallel_for(int n, Func func)
         func(i);
     }
 }
+#endif
 
 /// @brief Usage: Timer t("timer_name");
 ///               t.start();
@@ -224,6 +229,8 @@ public:
 Timer global_timer("global");
 Timer t_sim("sim"), t_main("main"), t_substep("substep"), t_init("init"), t_iter("iter");
 
+
+#if USE_CUDA
 /// @brief Usage: SdkTimer t("timer_name");
 ///               t.start();
 ///               //do something
@@ -261,6 +268,7 @@ public:
         sdkResetTimer(&m_timer);
     };
 };
+#endif
 
 // caution: the tic toc cannot be nested
 inline void tic()

@@ -1,6 +1,4 @@
 #define USE_OFF_DIAG 0
-#define USE_LIBIGL 0
-#define USE_CUDA 0
 
 #include <iostream>
 #include <string>
@@ -16,24 +14,18 @@
 #include <algorithm>
 #include <unordered_set>
 
-#if USE_CUDA
-#include <cuda_runtime.h>
-#include <thrust/universal_vector.h>
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include "helper_cuda.h"
-#include "helper_math.h"
-#include "helper_timer.h"
-#endif
-
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra>
 
-#if USE_LIBIGL
+#ifdef USE_LIBIGL
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
+#endif
+
+#ifdef USE_CUDA
+#include "cuda.cuh"
 #endif
 
 using namespace std;
@@ -167,27 +159,6 @@ std::string get_proj_dir_path()
 // this code run before main, in case of user forget to call get_proj_dir_path()
 static string proj_dir_path_pre_get = get_proj_dir_path();
 
-#if USE_CUDA
-/** @brief A parallel for loop. It should be used with a lambda function.
- * Learn from https://github.com/parallel101/course/blob/2d30da61b442008c003f69225e6feca20a4ca7df/08/06_thrust/01/main.cu
- * Usage:
- * // add one to each vertex
- * parallel_for<<<num_particles / 512, 128>>>(num_particles, [pos = pos.data()] __device__ (int i) {
- *    pos[i].y += 1.0;
- * });
- * checkCudaErrors(cudaDeviceSynchronize());
- *
- */
-template <typename Func>
-__global__ void parallel_for(int n, Func func)
-{
-    for (int i = blockDim.x * blockIdx.x + threadIdx.x;
-         i < n; i += blockDim.x * gridDim.x)
-    {
-        func(i);
-    }
-}
-#endif
 
 /// @brief Usage: Timer t("timer_name");
 ///               t.start();
@@ -230,45 +201,6 @@ Timer global_timer("global");
 Timer t_sim("sim"), t_main("main"), t_substep("substep"), t_init("init"), t_iter("iter");
 
 
-#if USE_CUDA
-/// @brief Usage: SdkTimer t("timer_name");
-///               t.start();
-///               //do something
-///               t.end();
-class SdkTimer
-{
-private:
-    StopWatchInterface *m_timer = NULL;
-
-public:
-    std::string name = "";
-    SdkTimer(std::string name_ = "") : name(name_)
-    {
-        sdkCreateTimer(&m_timer);
-    }
-    SdkTimer::~SdkTimer()
-    {
-        sdkDeleteTimer(&m_timer);
-    }
-
-    inline void start()
-    {
-        sdkStartTimer(&m_timer);
-    }
-
-    inline void end()
-    {
-        sdkStopTimer(&m_timer);
-        printf("%s time elapsed: %.4f(ms)\n", name.c_str(), sdkGetTimerValue(&m_timer));
-        sdkResetTimer(&m_timer);
-    };
-
-    inline void reset()
-    {
-        sdkResetTimer(&m_timer);
-    };
-};
-#endif
 
 // caution: the tic toc cannot be nested
 inline void tic()
@@ -1720,6 +1652,10 @@ void run_simulation()
 
 int main(int argc, char *argv[])
 {
+    #ifdef USE_CUDA
+    test_cuda();
+    #endif
+    
     t_main.start();
 
     clean_results_dir();

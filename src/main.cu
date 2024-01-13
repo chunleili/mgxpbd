@@ -1,3 +1,6 @@
+#define USE_OFF_DIAG 0
+#define USE_LIBIGL 0
+
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -24,10 +27,11 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra>
+
+#if USE_LIBIGL
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
-
-#define USE_OFF_DIAG 0
+#endif
 
 using namespace std;
 using Eigen::Map;
@@ -428,6 +432,21 @@ void printScalarField(std::string fileName, T content, size_t precision = 8)
     f.close();
 }
 
+//free from libigl
+void write_obj_my_impl(std::string out_mesh_name, Field3f &pos, Eigen::MatrixXi &tri_vis)
+{
+    std::ofstream myfile;
+    myfile.open(out_mesh_name);
+    for (int i = 0; i < pos.size(); i++)
+    {
+        myfile << "v " << pos[i][0] << " " << pos[i][1] << " " << pos[i][2] << "\n";
+    }
+    for (int i = 0; i < tri_vis.rows(); i++)
+    {
+        myfile << "f " << tri_vis(i, 0) + 1 << " " << tri_vis(i, 1) + 1 << " " << tri_vis(i, 2) + 1 << "\n";
+    }
+}
+
 void write_obj(std::string name = "")
 {
     tic();
@@ -439,8 +458,14 @@ void write_obj(std::string name = "")
     }
 
     printf("output mesh: %s\n", out_mesh_name.c_str());
+
+    #if USE_LIBIGL
     copy_pos_to_pos_vis();
     igl::writeOBJ(out_mesh_name, pos_vis, tri_vis);
+    #else
+    write_obj_my_impl(out_mesh_name, pos, tri_vis);
+    #endif
+
     toc("output mesh");
 }
 
@@ -1501,7 +1526,7 @@ void substep_all_solver()
     for (int iter = 0; iter <= max_iter; iter++)
     {
         t_iter.start();
-        printf("iter = %d ", iter);
+        // printf("iter = %d ", iter);
 
         // assemble A and b
         #if USE_OFF_DIAG
@@ -1528,9 +1553,9 @@ void substep_all_solver()
         transfer_back_to_pos_mfree();
 
         calc_dual_residual(iter);
-        printf(" dual_residual = %f\n", dual_residual[iter]);
+        // printf(" dual_residual = %f\n", dual_residual[iter]);
 
-        t_iter.end();
+        // t_iter.end();
     }
     update_vel();
 }

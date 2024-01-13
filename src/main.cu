@@ -27,6 +27,8 @@
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
 
+#define USE_OFF_DIAG 1
+
 using namespace std;
 using Eigen::Map;
 using Eigen::Vector2i;
@@ -930,12 +932,15 @@ void init_A_pattern()
         vector<int> adj = adjacent_edge[i];
         float diag = inv_mass[edge[i][0]] + inv_mass[edge[i][1]] + alpha;
         A.coeffRef(i,i) = diag;
+
+        #if USE_OFF_DIAG
         for(int j=0; j < adj.size(); j++)
         {
             int ia = adj[j];
             float off_diag = 0.0;
             A.coeffRef(i,ia) = off_diag;
         }
+        #endif
     }
     A.makeCompressed();
 }
@@ -1396,7 +1401,9 @@ void substep_all_solver()
         printf("iter = %d ", iter);
 
         // assemble A and b
+        #if USE_OFF_DIAG
         fill_A();
+        #endif
 
         update_constraints();
         fill_b();   //-C-alpha*lagrangian
@@ -1548,6 +1555,7 @@ void initialization()
     init_A_pattern();
     // savetxt("adjacent_edge.txt", adjacent_edge);
     // savetxt("adjacent_edge_abc.txt", adjacent_edge_abc);
+    // savetxt("num_adjacent_edge.txt", num_adjacent_edge);
     // savetxt("edge.txt", edge);
     // savetxt("csr_row_start.txt", csr_row_start);
     // savetxt("csr_col_idx.txt", csr_col_idx);

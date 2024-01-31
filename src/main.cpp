@@ -55,7 +55,7 @@ constexpr unsigned end_frame = 1000;
 unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
-string solver_type = "JACOBI";
+string solver_type = "AMG";//"AMG", "JACOBI", "GS"
 bool should_load_adjacent_edge=true;
 float dual_residual[end_frame+1]={0.0};
 
@@ -1448,13 +1448,14 @@ void solve_amg(const SpMat& A_=A, const VectorXf& b_=b, VectorXf &x_=dLambda)
     if (normb == 0.0) 
         normb = 1.0;
     float normr = (b_ - A_ * x_).norm();
-    for(int iter=0; iter < amg_max_iter && normr < tol * normb; iter++)
+    for(int iter=0; iter < amg_max_iter && normr >= tol * normb; iter++)
     {
         residual = b_ - A_ * x_;
         coarse_b = R * residual; // restriction
         coarse_x.setZero(M);
-        easy_gauss_seidel(A2, coarse_b, coarse_x); 
-        x_ = P * coarse_x; // prolongation
+        easy_gauss_seidel(A2, coarse_b, coarse_x); //coarse solve
+        x_ = x_ + P * coarse_x; // prolongation
+        // easy_gauss_seidel(A_, b_, x_); // smooth
         normr = (b_ - A_ * x_).norm();
     }
 }

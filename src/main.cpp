@@ -1446,7 +1446,7 @@ void solve_amg(const SpMat& A_=A, const VectorXf& b_=b, VectorXf &x_=dLambda)
 
     Eigen::VectorXf residual = Eigen::VectorXf::Zero(M);
     Eigen::VectorXf coarse_b = Eigen::VectorXf::Zero(M);
-    Eigen::VectorXf coarse_x = Eigen::VectorXf::Zero(M);
+    Eigen::VectorXf coarse_x = Eigen::VectorXf::Zero(P.cols());
     
     std::fill(x_.begin(), x_.end(), 0.0);
 
@@ -1458,10 +1458,9 @@ void solve_amg(const SpMat& A_=A, const VectorXf& b_=b, VectorXf &x_=dLambda)
     {
         residual = b_ - A_ * x_;
         coarse_b = R * residual; // restriction
-        //saveMatrix(R,"R.1");
-        coarse_x.setZero(M);
+        coarse_x.setZero();
         easy_gauss_seidel(A2, coarse_b, coarse_x); //coarse solve
-        x_ = x_ + P * coarse_x; // prolongation
+        x_ += P * coarse_x; // prolongation
         // easy_gauss_seidel(A_, b_, x_); // smooth
         normr = (b_ - A_ * x_).norm();
     }

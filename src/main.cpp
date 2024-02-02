@@ -50,12 +50,13 @@ std::string proj_dir_path;
 unsigned num_particles = 0;
 unsigned frame_num = 0;
 constexpr unsigned end_frame = 1000;
-unsigned max_iter = 50;
+constexpr unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
 string solver_type = "AMG";//"AMG", "JACOBI", "GS"
 bool should_load_adjacent_edge=true;
-float dual_residual[end_frame+1]={0.0};
+float dual_residual[max_iter+1]={0.0};
+float final_dual_residual[end_frame+1]={0.0};
 bool use_off_diag = false;
 bool save_A_0 = false;
 
@@ -164,30 +165,38 @@ static string proj_dir_path_pre_get = get_proj_dir_path();
 ///               t.end();
 class Timer
 {
-private:
+public:
     std::chrono::time_point<std::chrono::steady_clock> m_start;
     std::chrono::time_point<std::chrono::steady_clock> m_end;
-
-public:
+    std::chrono::duration<double, std::milli> elapsed_ms;
+    std::chrono::duration<double> elapsed_s;
     std::string name = "";
+
     Timer(std::string name = "") : name(name){};
     inline void start()
     {
         m_start = std::chrono::steady_clock::now();
     };
-    inline void end(string msg = "", string unit = "ms")
+    inline void end(string msg = "", string unit = "ms", bool verbose=true, string endsep = "\n")
     {
         m_end = std::chrono::steady_clock::now();
-        if (unit == "ms")
+        if (unit == "s")
         {
-            std::chrono::duration<double, std::milli> elapsed = m_end - m_start;
-            printf("%s(%s): %.5f(ms)\n", msg.c_str(), name.c_str(), elapsed.count());
+            elapsed_s = m_end - m_start;
+            if(verbose)
+                printf("%s(%s): %.0f(s)", msg.c_str(), name.c_str(), elapsed_s.count());
+            else
+                printf("%.0f(s)", elapsed_s.count());
         }
-        else if (unit == "s")
+        else //else if(unit == "ms")
         {
-            std::chrono::duration<double> elapsed = m_end - m_start;
-            printf("%s(%s): %.0f(s)\n", msg.c_str(), name.c_str(), elapsed.count());
+            elapsed_ms = m_end - m_start;
+            if(verbose)
+                printf("%s(%s): %.0f(ms)", msg.c_str(), name.c_str(), elapsed_ms.count());
+            else
+                printf("%.0f(ms)", elapsed_ms.count());
         }
+        printf("%s", endsep.c_str());
     }
     inline void reset()
     {
@@ -281,7 +290,7 @@ void savetxt(string filename, T &field)
 
 void loadtxt(std::string filename, FieldXi &M)
 {
-  printf("Loading %s with FieldXi\n", filename.c_str());
+//   printf("Loading %s with FieldXi\n", filename.c_str());
   std::ifstream inputFile(filename);
   std::string line;
 
@@ -374,7 +383,7 @@ void write_obj_my_impl(std::string out_mesh_name, Field3f &pos, Eigen::MatrixXi 
 
 void write_obj(std::string name = "")
 {
-    tic();
+    // tic();
     std::string path = proj_dir_path + "/results/";
     std::string out_mesh_name = path + std::to_string(frame_num) + ".obj";
     if (name != "")
@@ -382,7 +391,7 @@ void write_obj(std::string name = "")
         out_mesh_name = path + name + std::to_string(frame_num) + ".obj";
     }
 
-    printf("output mesh: %s\n", out_mesh_name.c_str());
+    // printf("output mesh: %s\n", out_mesh_name.c_str());
 
     #if USE_LIBIGL
     copy_pos_to_pos_vis();
@@ -391,7 +400,7 @@ void write_obj(std::string name = "")
     write_obj_my_impl(out_mesh_name, pos, tri_vis);
     #endif
 
-    toc("output mesh");
+    // toc("output mesh");
 }
 
 
@@ -416,7 +425,7 @@ void clean_results_dir()
         }
     }
 
-    std::cout<<"clean results dir done!"<<endl;
+    std::cout<<"clean results dir done."<<endl;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -534,7 +543,7 @@ void init_adjacent_edge()
 {
     if (should_load_adjacent_edge)
     {
-        printf("load adjacent edge!\n");
+        printf("load adjacent edge...\n");
         loadtxt(proj_dir_path+"/data/misc/adjacent_edge.txt",adjacent_edge);
         return;
     }
@@ -1344,26 +1353,29 @@ void substep_all_solver()
         // t_iter.end();
     }
     update_vel();
+    final_dual_residual[frame_num] = dual_residual[max_iter-1];
 }
 
 void main_loop()
 {
     for (frame_num = 0; frame_num <= end_frame; frame_num++)
     {
-        printf("\n\n----frame_num:%d----\n", frame_num);
+        // printf("\n\n----frame_num:%d----\n", frame_num);
 
         t_substep.start();
         // substep_xpbd();
         substep_all_solver();
-        t_substep.end();
+        std::cout<< "frame: "+std::to_string(frame_num)+"/1000 ";
+        t_substep.end("","ms",false, " ");
+        printf("r: %.2g\n", final_dual_residual[frame_num]);
 
         if (output_mesh)
         {
             write_obj();
         }
 
-        printf("frame_num = %d done\n", frame_num);
-        printf("---------\n\n");
+        // printf("frame_num = %d done\n", frame_num);
+        // printf("---------\n\n");
     }
 }
 
@@ -1493,6 +1505,7 @@ void initialization()
         std::cout<<"save A done\n";
     }
     
+    std::cout << "init done.\n\n";
     t_init.end();
 }
 

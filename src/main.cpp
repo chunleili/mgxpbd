@@ -256,11 +256,17 @@ void savetxt(string filename, Field2i &field)
     myfile.close();
 }
 
-// void savetxt(string filename, Field1f &field)
-// {
-//     Eigen::Map<Eigen::VectorXf> v(field.data(), field.size());
-//     Eigen::saveMarket(v, filename);
-// }
+template<typename T = Eigen::VectorXf>
+void saveVector(T& d, string filename = "vec")
+{
+    Eigen::saveMarket(d, filename);
+}
+
+template<typename T = SpMat>
+ void saveMatrix(T& d, string filename = "mat")
+ {
+     Eigen::saveMarket(d, filename);
+ }
 
 template<typename T=Field1i>
 void savetxt(string filename, T &field)
@@ -1452,6 +1458,7 @@ void solve_amg(const SpMat& A_=A, const VectorXf& b_=b, VectorXf &x_=dLambda)
     {
         residual = b_ - A_ * x_;
         coarse_b = R * residual; // restriction
+        //saveMatrix(R,"R.1");
         coarse_x.setZero(M);
         easy_gauss_seidel(A2, coarse_b, coarse_x); //coarse solve
         x_ = x_ + P * coarse_x; // prolongation

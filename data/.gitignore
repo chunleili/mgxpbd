@@ -1,2 +1,5 @@
 largeModels
 models/bunny2.obj
+misc/A.0.mtx
+misc/R.pyamg.mtx
+misc/P.pyamg.mtx

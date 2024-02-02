@@ -57,6 +57,7 @@ string solver_type = "AMG";//"AMG", "JACOBI", "GS"
 bool should_load_adjacent_edge=true;
 float dual_residual[end_frame+1]={0.0};
 bool use_off_diag = false;
+bool save_A_0 = false;
 
 // typedefs
 using Vec3f = Eigen::Vector3f;
@@ -1638,19 +1639,22 @@ void initialization()
     // savetxt("num_adjacent_edge.txt", num_adjacent_edge);
 
     //save A for generating R and P
-    std::cout<<"save A for generating R and P\n";
-    if(use_off_diag == false)
+    if(save_A_0)
     {
-        use_off_diag = true;
-        init_A_pattern();
-        fill_A();//fill off-diagal: m_a*dot(g_ab,g_ac)
-        use_off_diag = false;
+        std::cout<<"save A for generating R and P\n";
+        if(use_off_diag == false)
+        {
+            use_off_diag = true;
+            init_A_pattern();
+            fill_A();//fill off-diagal: m_a*dot(g_ab,g_ac)
+            use_off_diag = false;
+        }
+        saveMatrix(A, proj_dir_path+"/data/misc/A.0.mtx");
+        std::cout<<"A: "<<A.rows()<<"x"<<A.cols()<<std::endl;
+        std::cout<<"A.nnz: "<<A.nonZeros()<<std::endl;
+        saveMatrix(A, proj_dir_path+"/data/misc/A.0.mtx");
+        std::cout<<"save A done\n";
     }
-    saveMatrix(A, proj_dir_path+"/data/misc/A.0.mtx");
-    std::cout<<"A: "<<A.rows()<<"x"<<A.cols()<<std::endl;
-    std::cout<<"A.nnz: "<<A.nonZeros()<<std::endl;
-    saveMatrix(A, proj_dir_path+"/data/misc/A.0.mtx");
-    std::cout<<"save A done\n";
     
     t_init.end();
 }

@@ -1636,14 +1636,21 @@ void initialization()
     // savetxt("adjacent_edge.txt", adjacent_edge);
     // savetxt("adjacent_edge_abc.txt", adjacent_edge_abc);
     // savetxt("num_adjacent_edge.txt", num_adjacent_edge);
-    // savetxt("edge.txt", edge);
-    // savetxt("my_A.csr_row_start.txt", my_A.csr_row_start);
-    // savetxt("my_A.csr_col_idx.txt", my_A.csr_col_idx);
-    // savetxt("my_A.csr_val.txt", my_A.csr_val);
-    // savetxt("my_A.coo_i_arr.txt", my_A.coo_i_arr);
-    // savetxt("my_A..txt", my_A.);
-    // savetxt("my_A.coo_v.txt", my_A.coo_v);
-    // exit(0);
+
+    //save A for generating R and P
+    std::cout<<"save A for generating R and P\n";
+    if(use_off_diag == false)
+    {
+        use_off_diag = true;
+        init_A_pattern();
+        fill_A();//fill off-diagal: m_a*dot(g_ab,g_ac)
+        use_off_diag = false;
+    }
+    saveMatrix(A, proj_dir_path+"/data/misc/A.0.mtx");
+    std::cout<<"A: "<<A.rows()<<"x"<<A.cols()<<std::endl;
+    std::cout<<"A.nnz: "<<A.nonZeros()<<std::endl;
+    saveMatrix(A, proj_dir_path+"/data/misc/A.0.mtx");
+    std::cout<<"save A done\n";
     
     t_init.end();
 }

@@ -84,8 +84,6 @@ Field3f pos_mid;
 Field3f acc_pos;
 Field3f old_pos;
 Field23f gradC;
-// Field1f b(M);
-// Field1f dLambda(M);
 FieldXi v2e; // vertex to edges
 FieldXi adjacent_edge; //give a edge idx, get all its neighbor edges
 FieldXi edge_abi; //(a,b,i): vertex a, vertex b, edge i. (a<b)
@@ -286,7 +284,7 @@ void loadtxt(std::string filename, FieldXi &M)
   printf("Loading %s with FieldXi\n", filename.c_str());
   std::ifstream inputFile(filename);
   std::string line;
-//   std::vector<vec> values;
+
   unsigned int rows = 0;
   while (std::getline(inputFile, line))
   {
@@ -299,28 +297,9 @@ void loadtxt(std::string filename, FieldXi &M)
     }
     rows++;
   }
-//   M.resize(rows);
-//   for (int i = 0; i < rows; i++)
-//   {
-//     unsigned int num_per_row = M[i].size();
-//     for (int j = 0; j < num_per_row; j++)
-//     {
-//       M[i][j] = values[i * num_per_row + j];
-//     }
-//   }
+
 }
 
-
-void test()
-{
-    // Eigen::saveMarket(M_inv, "M.mtx");
-    // Eigen::saveMarket(ALPHA, "ALPHA.mtx");
-    // Eigen::saveMarket(R, "RR.mtx");
-    // Eigen::saveMarket(P, "PP.mtx");
-    printf("\nsaving A.mtx\n");
-    Eigen::saveMarket(A, "A.mtx");
-    // Eigen::saveMarket(G, "G.mtx");
-}
 
 float maxField(std::vector<Vec3f> &field)
 {
@@ -592,54 +571,6 @@ void init_adjacent_edge()
     printf("maxsize = %d\n", maxsize);
 
 
-    // //get adjacent edges with shared vertex a
-    // std::sort(edge_abi.begin(), edge_abi.end(), 
-    // [](const vector<int>& a, const vector<int>& b)
-    // {
-    //     return a[0]<b[0];
-    // });
-
-    // for (int k = 0; k < NE-1; k++)
-    // {
-    //     int a = edge_abi[k][0];
-    //     int b = edge_abi[k][1];
-    //     int i = edge_abi[k][2];
-
-    //     int a2 = edge_abi[k+1][0];
-    //     int b2 = edge_abi[k+1][1];
-    //     int i2 = edge_abi[k+1][2];
-
-    //     if (a==a2)
-    //     {
-    //         adjacent_edge[i].push_back(i2);
-    //         adjacent_edge[i2].push_back(i);
-    //     }
-    //     k++;
-    // }
-    
-    // //get adjacent edges with shared vertex b
-    // std::sort(edge_abi.begin(), edge_abi.end(), 
-    // [](const vector<int>& a, const vector<int>& b)
-    // {
-    //     return a[1]<b[1];
-    // });
-
-    // for (int k = 0; k < NE-1; k++)
-    // {
-    //     int a = edge_abi[k][0];
-    //     int b = edge_abi[k][1];
-    //     int i = edge_abi[k][2];
-
-    //     int a2 = edge_abi[k+1][0];
-    //     int b2 = edge_abi[k+1][1];
-    //     int i2 = edge_abi[k+1][2];
-
-    //     if (b==b2)
-    //     {
-    //         adjacent_edge[i].push_back(i2);
-    //         adjacent_edge[i2].push_back(i);
-    //     }
-    // }
 }
 
 
@@ -974,100 +905,6 @@ void init_A_pattern_and_csr_coo_arr()
     }
     A.makeCompressed();
 }
-
-
-// // the bug of fill_A_cuda is not fix yet
-// void fill_A_cuda()
-// {
-//     A.reserve(Eigen::VectorXf::Constant(M, 15));
-
-//     thrust::device_vector<Vec2i> d_edge(edge.begin(), edge.end());
-//     thrust::device_vector<Vec3f> d_pos(pos.begin(), pos.end());
-//     thrust::device_vector<float> d_inv_mass(inv_mass.begin(), inv_mass.end());
-    
-//     for(int i=0;i<5;i++)
-//     {
-//         cout<<"d_edge["<<i<<"] = "<<static_cast<Vec2i>(d_edge[i])[1]<<endl;
-//     }
-
-//     // add one to each vertex
-//     parallel_for<<<NE / 256, 256>>>(NE, 
-//     [
-//         edge = d_edge.data(),
-//         inv_mass = d_inv_mass.data(),
-//         alpha = alpha
-//     ] __device__ (int i) 
-//     {
-//         //fill diagonal:m1 + m2 + alpha
-//         int ii0 = static_cast<Vec2i>(edge[i])[0];
-//         int ii1 = static_cast<Vec2i>(edge[i])[1];
-//         // if (i==0)
-//         //     printf("ii0 = %d, ii1 = %d\n",ii0,ii1);
-//         float invM0 = inv_mass[ii0];
-//         float invM1 = inv_mass[ii1];
-//         float diag = (invM0 + invM1 + alpha);
-//         // A.insert(i,i) = diag;
-
-//         // //fill off-diagonal: m_a*dot(g_ab,g_ab)
-//         // vector<int> adj = adjacent_edge[i];
-//         // for (int j = 0; j < adj.size(); j++)
-//         // {
-//         //     int ia = adj[j];
-//         //     if(ia==i)
-//         //     {
-//         //         printf("%d self!\n",ia);
-//         //         continue;
-//         //     }
-
-//         //     int jj0 = edge[ia][0];
-//         //     int jj1 = edge[ia][1];
-
-//         //     // a is shared vertex 
-//         //     // a-b is the first edge, a-c is the second edge
-//         //     int a=-1,b=-1,c=-1;
-//         //     if(ii0==jj0)
-//         //     {
-//         //         a=ii0;
-//         //         b=ii1;
-//         //         c=jj1;
-//         //     }
-//         //     else if(ii0==jj1)
-//         //     {
-//         //         a=ii0;
-//         //         b=ii1;
-//         //         c=jj0;
-//         //     }
-//         //     else if(ii1==jj0)
-//         //     {
-//         //         a=ii1;
-//         //         b=ii0;
-//         //         c=jj1;
-//         //     }
-//         //     else if(ii1==jj1)
-//         //     {
-//         //         a=ii1;
-//         //         b=ii0;
-//         //         c=jj0;
-//         //     }
-//         //     else
-//         //     {
-//         //         printf("%d no shared vertex!\n",ia);
-//         //         continue;
-//         //     }
-            
-            
-//         //     // m_a*dot(g_ab,g_ab)
-//         //     Vec3f g_ab = normalize(pos[a] - pos[b]);
-//         //     Vec3f g_ac = normalize(pos[a] - pos[c]);
-//         //     float off_diag = inv_mass[a] * dot(g_ab, g_ac);
-
-//         //     A.insert(i,ia) = off_diag;
-//         // }
-//     });
-//     checkCudaErrors(cudaDeviceSynchronize());
-  
-//     A.makeCompressed();
-// }
 
 
 // legacy code without warm start(init_A_pattern)

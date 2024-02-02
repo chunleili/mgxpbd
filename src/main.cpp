@@ -1,5 +1,3 @@
-#define USE_OFF_DIAG 0
-
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -58,6 +56,7 @@ bool output_mesh = true;
 string solver_type = "AMG";//"AMG", "JACOBI", "GS"
 bool should_load_adjacent_edge=true;
 float dual_residual[end_frame+1]={0.0};
+bool use_off_diag = false;
 
 // typedefs
 using Vec3f = Eigen::Vector3f;
@@ -912,14 +911,15 @@ void init_A_pattern()
         float diag = inv_mass[edge[i][0]] + inv_mass[edge[i][1]] + alpha;
         A.coeffRef(i,i) = diag;
 
-        #if USE_OFF_DIAG
-        for(int j=0; j < adj.size(); j++)
+        if(use_off_diag)
         {
-            int ia = adj[j];
-            float off_diag = 0.0;
-            A.coeffRef(i,ia) = off_diag;
+            for(int j=0; j < adj.size(); j++)
+            {
+                int ia = adj[j];
+                float off_diag = 0.0;
+                A.coeffRef(i,ia) = off_diag;
+            }
         }
-        #endif
     }
     A.makeCompressed();
 }
@@ -1477,9 +1477,10 @@ void substep_all_solver()
         // printf("iter = %d ", iter);
 
         // assemble A and b
-        #if USE_OFF_DIAG
-        fill_A();
-        #endif
+        if(use_off_diag)
+        {
+            fill_A();
+        }
 
         update_constraints();
         fill_b();   //-C-alpha*lagrangian

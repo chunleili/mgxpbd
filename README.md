@@ -39,6 +39,6 @@ Variables, functions, folder names, and file names should all be written in **lo
 
 For larger models(>100MB) that cannot be uploaded to GitHub, please place them under the "large_models" directory to avoid polluting the Git repository.
 
-Run `python auto.py` can directly run the program and generate the results.
+Run `python auto.py` can directly compile and run the program and generate the results.
 
-Copy `extern\eigen\debug\msvc\eigen.natvis` to `C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Packages\Debugger\Visualizers` can make you inspect Eigen matrices in Visual Studio debugger(VSCode is not available yet).
+Copy `extern\eigen\debug\msvc\eigen.natvis` to `C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Packages\Debugger\Visualizers`(or `%USERPROFILE%\Documents\Visual Studio 2022\Visualizers`) can make you inspect Eigen matrices in Visual Studio debugger(VSCode is not available yet).

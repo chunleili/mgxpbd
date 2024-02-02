@@ -9,10 +9,11 @@ Requirements:
 - vcpkg
 
 Build steps:
-1. Change the vcpkg path in CMakePresets.json to your own path.
-   ```
-   "toolchainFile": "C:/Dev/vcpkg/scripts/buildsystems/vcpkg.cmake"
-   ```
+1. Change the vcpkg path in CMakePresets.json "configurePresets" to your own path.
+   For example, if your vcpkg is in `C:/Dev/vcpkg`
+   `"toolchainFile": "C:/Dev/vcpkg/scripts/buildsystems/vcpkg.cmake"`. Or if your vcpkg is in `E:/codes/vcpkg`
+   `"toolchainFile": "E:/codes/vcpkg/scripts/buildsystems/vcpkg.cmake"`
+
 2. Config
     ```
     cmake --preset=vs2022
@@ -34,10 +35,10 @@ Output files locate in results folder.
 
 ## Extra
 
-为了保持代码风格与libigl一致，一律使用小写下划线命名变量、函数、文件夹名和文件名，用大驼峰命名类。
+Variables, functions, folder names, and file names should all be written in **lowercase_with_underscores**, while classes should be named using PascalCase.
 
-较大模型github无法上传, 请放在large_models下面，不要污染了git仓库。
+For larger models(>100MB) that cannot be uploaded to GitHub, please place them under the "large_models" directory to avoid polluting the Git repository.
 
-proj_dir_path 是全局变量，获取到的是项目的根目录，它依赖于main.cpp/main.cu的位置，因此不要随意移动main.cpp/main.cu的位置。其定义放在紧跟get_proj_dir_path函数的后面。利用static变量初始化会保证其在main函数之前初始化。
+Run `python auto.py` can directly run the program and generate the results.
 
-timer的用法：我实现了两种timer，一种是SdkTimer，利用位于include/helper_timer.h的CUDA的API，另一种是利用CPP17的API。建议用后者。用法见class Timer的注释。由于写着方便，就先都定义为全局变量了。变量定义放在紧跟着class定义的后面。
+Copy `extern\eigen\debug\msvc\eigen.natvis` to `C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Packages\Debugger\Visualizers` can make you inspect Eigen matrices in Visual Studio debugger(VSCode is not available yet).

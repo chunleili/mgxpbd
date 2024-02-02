@@ -4,3 +4,4 @@ out
 .vscode
 .vs
 results
+CMakePresets.json

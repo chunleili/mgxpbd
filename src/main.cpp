@@ -55,10 +55,12 @@ std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
 string solver_type = "AMG";//"AMG", "JACOBI", "GS"
 bool should_load_adjacent_edge=true;
-float dual_residual[max_iter+1]={0.0};
+std::vector<float> dual_residual(end_frame,0.0);
 float final_dual_residual[end_frame+1]={0.0};
-bool use_off_diag = false;
+std::vector<float> ls_residual(end_frame,0.0);
+bool use_off_diag = true;
 bool save_A_0 = false;
+bool report_iter_residual = true;
 
 // typedefs
 using Vec3f = Eigen::Vector3f;
@@ -840,6 +842,10 @@ void calc_dual_residual(int iter)
     dual_residual[iter] = std::sqrt(dual_residual[iter]);
 }
 
+void calc_linear_system_residual(int iter)
+{
+    ls_residual[iter] = (b-A*dLambda).norm();
+}
 
 void init_A_pattern()
 {
@@ -1317,19 +1323,28 @@ void substep_all_solver()
 {
     semi_euler();
     reset_lagrangian();
+
+    if(use_off_diag)
+    {
+        fill_A();
+    }
+
+    std::fill(ls_residual.begin(), ls_residual.end(), 0.0);
+    std::fill(dual_residual.begin(), dual_residual.end(), 0.0);
+
     for (int iter = 0; iter <= max_iter; iter++)
     {
         t_iter.start();
-        // printf("iter = %d ", iter);
-
-        // assemble A and b
-        if(use_off_diag)
-        {
-            fill_A();
-        }
 
         update_constraints();
         fill_b();   //-C-alpha*lagrangian
+
+        // if(frame_num==100)
+        // {
+        //     saveMatrix(A, proj_dir_path + "/data/misc/A_100.mtx");
+        //     saveVector(b, proj_dir_path + "/data/misc/b_100.txt");
+        //     exit(0);
+        // }
 
         // solve Ax=b
         if (solver_type == "GS")
@@ -1348,11 +1363,16 @@ void substep_all_solver()
         transfer_back_to_pos_mfree();
 
         calc_dual_residual(iter);
-        // printf(" dual_residual = %f\n", dual_residual[iter]);
+        calc_linear_system_residual(iter);
 
+        if(report_iter_residual)
+        {
+            printf("%d: %.3e\n", iter, dual_residual[iter]);
+        }
         // t_iter.end();
     }
     update_vel();
+
     final_dual_residual[frame_num] = dual_residual[max_iter-1];
 }
 
@@ -1360,13 +1380,15 @@ void main_loop()
 {
     for (frame_num = 0; frame_num <= end_frame; frame_num++)
     {
-        // printf("\n\n----frame_num:%d----\n", frame_num);
+        if(report_iter_residual)
+            printf("\n\n----frame :%d----\n", frame_num);
 
         t_substep.start();
         // substep_xpbd();
         substep_all_solver();
         std::cout<< "frame: "+std::to_string(frame_num)+"/1000 ";
         t_substep.end("","ms",false, " ");
+        
         printf("r: %.2g\n", final_dual_residual[frame_num]);
 
         if (output_mesh)
@@ -1382,8 +1404,8 @@ void main_loop()
 void load_R_P()
 {
     // load R, P
-    Eigen::loadMarket(R, proj_dir_path + "/data/misc/R.mtx");
-    Eigen::loadMarket(P, proj_dir_path + "/data/misc/P.mtx");
+    Eigen::loadMarket(R, proj_dir_path + "/data/misc/R.pyamg.mtx");
+    Eigen::loadMarket(P, proj_dir_path + "/data/misc/P.pyamg.mtx");
 
     std::cout << "R: " << R.rows() << " " << R.cols() << std::endl;
     std::cout << "P: " << P.rows() << " " << P.cols() << std::endl;

@@ -34,7 +34,7 @@ using SpMat = Eigen::SparseMatrix<float>;
 using Triplet = Eigen::Triplet<float>;
 
 // constants
-const int N = 256;
+const int N = 64;
 const int NV = (N + 1) * (N + 1);
 const int NT = 2 * N * N;
 const int NE = 2 * N * (N + 1) + N * N;
@@ -53,8 +53,8 @@ constexpr unsigned end_frame = 1000;
 constexpr unsigned max_iter = 50;
 std::string out_dir = "./result/cloth3d_256_50_amg/";
 bool output_mesh = true;
-string solver_type = "AMG";//"AMG", "JACOBI", "GS"
-bool should_load_adjacent_edge=true;
+string solver_type = "GS";//"AMG", "JACOBI", "GS"
+bool should_load_adjacent_edge=false;
 std::vector<float> dual_residual(end_frame,0.0);
 float final_dual_residual[end_frame+1]={0.0};
 std::vector<float> ls_residual(end_frame,0.0);
@@ -268,7 +268,7 @@ void savetxt(string filename, Field2i &field)
 template<typename T = Eigen::VectorXf>
 void saveVector(T& d, string filename = "vec")
 {
-    Eigen::saveMarket(d, filename);
+    savetxt<T>(filename, d);
 }
 
 template<typename T = SpMat>
@@ -1339,12 +1339,12 @@ void substep_all_solver()
         update_constraints();
         fill_b();   //-C-alpha*lagrangian
 
-        // if(frame_num==100)
-        // {
-        //     saveMatrix(A, proj_dir_path + "/data/misc/A_100.mtx");
-        //     saveVector(b, proj_dir_path + "/data/misc/b_100.txt");
-        //     exit(0);
-        // }
+        if(frame_num==10)
+        {
+            saveMatrix(A, proj_dir_path + "/data/misc/A_10.mtx");
+            saveVector(b, proj_dir_path + "/data/misc/b_10.txt");
+            exit(0);
+        }
 
         // solve Ax=b
         if (solver_type == "GS")
@@ -1367,7 +1367,8 @@ void substep_all_solver()
 
         if(report_iter_residual)
         {
-            printf("%d: %.3e\n", iter, dual_residual[iter]);
+            printf("%d: %.3e\t", iter, dual_residual[iter]);
+            printf("%.3e\n", ls_residual[iter]);
         }
         // t_iter.end();
     }

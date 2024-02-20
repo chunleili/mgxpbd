@@ -438,19 +438,19 @@ int main(int argc, const char **argv)
     //AMGX_solver_solve(solver, b, x);
     AMGX_solver_get_status(solver, &status);
     /* example of how to print the residual history */
-    //int nit;
-    //double res;
-    //AMGX_solver_get_iterations_number(solver, &nit);
-    //for (int i=0; i<nit; i++) {
-    //  printf("residual from iteration %d=", i);
-    //  for (int j=0; j<bsize_y; j++) {
-    //    AMGX_solver_get_iteration_residual(solver, i, j, &res);
-    //    printf("%f ", (float)(res));
-    //  }
-    //  printf("\n");
-    //}
+    int nit;
+    double res;
+    AMGX_solver_get_iterations_number(solver, &nit);
+    for (int i=0; i<nit; i++) {
+     printf("residual from iteration %d=", i);
+     for (int j=0; j<bsize_y; j++) {
+       AMGX_solver_get_iteration_residual(solver, i, j, &res);
+       printf("%f ", (float)(res));
+     }
+     printf("\n");
+    }
     /* example of how to write the linear system to the output */
-    //AMGX_write_system(A, b, x, "output.system.mtx");
+    AMGX_write_system(A, b, x, "output.system.mtx");
     /* destroy resources, matrix, vector and solver */
     AMGX_solver_destroy(solver);
     AMGX_vector_destroy(x);

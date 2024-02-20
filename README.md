@@ -37,8 +37,12 @@ Output files locate in results folder.
 
 Variables, functions, folder names, and file names should all be written in **lowercase_with_underscores**, while classes should be named using PascalCase.
 
-For larger models(>100MB) that cannot be uploaded to GitHub, please place them under the "large_models" directory to avoid polluting the Git repository.
+For larger models(>50MB) that cannot be uploaded to GitHub, please do not put them in the git, which will pollute the history.  Use **GitHub Release** page to upload them and provide the download link in the README.md.
 
 Run `python auto.py` can directly compile and run the program and generate the results.
 
+### Debug Eigen in Visual Studio
 Copy `extern\eigen\debug\msvc\eigen.natvis` to `C:\Program Files (x86)\Microsoft Visual Studio\2022\Community\Common7\Packages\Debugger\Visualizers`(or `%USERPROFILE%\Documents\Visual Studio 2022\Visualizers`) can make you inspect Eigen matrices in Visual Studio debugger(VSCode is not available yet).
+
+### AMGX
+See [AMGX](extern/amgx/README.md) for more details.

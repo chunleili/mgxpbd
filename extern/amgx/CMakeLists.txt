@@ -21,3 +21,13 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_LIST_DIR}/lib ${CMAKE_BINARY_DIR}/extern/amgx/$<CONFIGURATION>
         )
+
+add_executable(convert convert.cpp)
+target_include_directories(convert PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+target_link_libraries(convert ${dyn_libs} )
+
+add_custom_command(
+        TARGET convert  POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_LIST_DIR}/lib ${CMAKE_BINARY_DIR}/extern/amgx/$<CONFIGURATION>
+        )

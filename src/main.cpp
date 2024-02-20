@@ -1339,7 +1339,7 @@ void substep_all_solver()
         update_constraints();
         fill_b();   //-C-alpha*lagrangian
 
-        if(frame_num==10)
+        if(frame_num==100)
         {
             saveMatrix(A, proj_dir_path + "/data/misc/A_10.mtx");
             saveVector(b, proj_dir_path + "/data/misc/b_10.txt");

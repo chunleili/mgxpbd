@@ -42,3 +42,10 @@ option(USE_VIEWER "Use viewer"	OFF)
 if(USE_VIEWER)
     add_subdirectory(tools/viewer)
 endif()
+
+
+option(judge_positive_definite "judge_positive_definite"	OFF)
+if(judge_positive_definite)
+    add_executable(judge_positive_definite scripts/judge_positive_definite.cpp)
+    target_include_directories(judge_positive_definite PUBLIC extern/eigen)
+endif()

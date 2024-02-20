@@ -49,3 +49,9 @@ if(judge_positive_definite)
     add_executable(judge_positive_definite scripts/judge_positive_definite.cpp)
     target_include_directories(judge_positive_definite PUBLIC extern/eigen)
 endif()
+
+
+option(USE_AMGX "Use AMGX"	OFF)
+if(USE_AMGX)
+    add_subdirectory(extern/amgx)
+endif()

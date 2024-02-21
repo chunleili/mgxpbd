@@ -1339,10 +1339,13 @@ void substep_all_solver()
         update_constraints();
         fill_b();   //-C-alpha*lagrangian
 
-        if(frame_num==100)
+        int stop = 10;
+        if(frame_num==stop)
         {
-            saveMatrix(A, proj_dir_path + "/data/misc/A_10.mtx");
-            saveVector(b, proj_dir_path + "/data/misc/b_10.txt");
+            auto filename_A = proj_dir_path + "/data/misc/A_"+to_string(stop)+"_N"+to_string(N)+".mtx";
+            auto filename_b = proj_dir_path + "/data/misc/b_"+to_string(stop)+"_N"+to_string(N)+".txt";
+            saveMatrix(A, filename_A);
+            saveVector(b, filename_b);
             exit(0);
         }
 

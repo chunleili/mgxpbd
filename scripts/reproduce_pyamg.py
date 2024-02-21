@@ -20,16 +20,16 @@ sys.path.append(os.getcwd())
 
 def test_amg(mat_size = 10):
     # ------------------------------- prepare data ------------------------------- #
-    generate_data = True
-
+    generate_data = False
+    N = 20
     if(generate_data):
         print("generating data...")
         A, b = generate_A_b_pyamg(n=mat_size)
     else:
         print("loading data...")
-        A = scipy.io.mmread("E:/Dev/mgxpbd/data/misc/A_10.mtx")
+        A = scipy.io.mmread(f"C:/Dev/mgxpbd/data/misc/A_10_N{N}.mtx")
         A = A.tocsr()
-        b = np.loadtxt("E:/Dev/mgxpbd/data/misc/b_10.txt", dtype=np.float32)
+        b = np.loadtxt(f"C:/Dev/mgxpbd/data/misc/b_10_N{N}.txt", dtype=np.float32)
 
     # generate R by pyamg
     ml = pyamg.ruge_stuben_solver(A, max_levels=2)
@@ -57,13 +57,13 @@ def test_amg(mat_size = 10):
     # ------------------------------- print results ------------------------------- #
     print_residuals(r_norms_pyamg, "pyamg")
     print_residuals(r_norms_rep, "rep")
-    print_residuals(r_norms_simplest, "simplest")
+    # print_residuals(r_norms_simplest, "simplest")
     
     fig, axs = plt.subplots(2, 1, figsize=(8, 8))
     plot_r_norms(r_norms_pyamg, axs[0], title="pyamg",linestyle="-",label="pyamg")
     plot_r_norms(r_norms_pyamg, axs[1], title="repr",linestyle="-",label="pyamg")
     plot_r_norms(r_norms_rep, axs[1], title="repr", linestyle="--",label="rep")
-    plot_r_norms(r_norms_simplest, axs[1], title="repr", linestyle="-.",label="simplest")
+    # plot_r_norms(r_norms_simplest, axs[1], title="repr", linestyle="-.",label="simplest")
     plt.tight_layout()
     plt.show()
 

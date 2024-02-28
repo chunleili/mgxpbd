@@ -10,26 +10,35 @@ import pyamg
 from pyamg.gallery import poisson
 from pyamg.relaxation.smoothing import change_smoothers
 from collections import namedtuple
+import argparse
 
 # from pyamg.relaxation import make_system
 # from pyamg import amg_core
 
 sys.path.append(os.getcwd())
 
+prj_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) + "/"
+print("prj_dir", prj_dir)
+to_read_dir = prj_dir + "result/test/"
 
+parser = argparse.ArgumentParser()
+parser.add_argument("-N", type=int, default=100)
+N = parser.parse_args().N
+plot_title = f"rod3d N={N}"
+save_fig_instad_of_show = False
 
 def test_amg(mat_size = 10):
     # ------------------------------- prepare data ------------------------------- #
     generate_data = False
-    N = 20
+    # N = 20
     if(generate_data):
         print("generating data...")
         A, b = generate_A_b_pyamg(n=mat_size)
     else:
         print("loading data...")
-        A = scipy.io.mmread(f"C:/Dev/mgxpbd/data/misc/A_10_N{N}.mtx")
+        A = scipy.io.mmread(to_read_dir+f"A_f100.mtx")
         A = A.tocsr()
-        b = np.loadtxt(f"C:/Dev/mgxpbd/data/misc/b_10_N{N}.txt", dtype=np.float32)
+        b = np.loadtxt(to_read_dir+f"b_f100.txt", dtype=np.float32)
 
     # generate R by pyamg
     ml = pyamg.ruge_stuben_solver(A, max_levels=2)
@@ -50,22 +59,31 @@ def test_amg(mat_size = 10):
     r_norms_rep = []
     x_rep = timer_wrapper(solve_rep, A, b, x0, R, P, r_norms_rep)
 
-    print("Solving simplest...")
-    r_norms_simplest = []
-    x_simplest = timer_wrapper(solve_simplest, A, b, R, P, r_norms_simplest)
+    # print("Solving simplest...")
+    # r_norms_simplest = []
+    # x_simplest = timer_wrapper(solve_simplest, A, b, R, P, r_norms_simplest)
+
+    print("Solving rep_Anorm...")
+    r_norms_repAnorm = []
+    x_rep = timer_wrapper(solve_rep_Anorm, A, b, x0, R, P, r_norms_repAnorm)
 
     # ------------------------------- print results ------------------------------- #
     print_residuals(r_norms_pyamg, "pyamg")
     print_residuals(r_norms_rep, "rep")
     # print_residuals(r_norms_simplest, "simplest")
+    print_residuals(r_norms_repAnorm, "rep_Anorm")
     
     fig, axs = plt.subplots(2, 1, figsize=(8, 8))
-    plot_r_norms(r_norms_pyamg, axs[0], title="pyamg",linestyle="-",label="pyamg")
-    plot_r_norms(r_norms_pyamg, axs[1], title="repr",linestyle="-",label="pyamg")
-    plot_r_norms(r_norms_rep, axs[1], title="repr", linestyle="--",label="rep")
+    plot_r_norms(r_norms_pyamg, axs[0], title=plot_title,linestyle="-",label="pyamg")
+    # plot_r_norms(r_norms_pyamg, axs[1], title="repr",linestyle="-",label="pyamg")
+    # plot_r_norms(r_norms_rep, axs[1], title="repr", linestyle="--",label="rep")
     # plot_r_norms(r_norms_simplest, axs[1], title="repr", linestyle="-.",label="simplest")
+    plot_r_norms(r_norms_repAnorm, axs[1], linestyle="-.",label="repr_Anorm")
     plt.tight_layout()
-    plt.show()
+    if save_fig_instad_of_show:
+        plt.savefig(f"residuals_{plot_title}.png")
+    else:
+        plt.show()
 
 
 def timer_wrapper(func, *args, **kwargs):
@@ -98,9 +116,8 @@ def solve_pyamg(ml, b, r_norms=[]):
     return x
 
 
-def solve_rep(A, b, x0, R, P, r_norms=[]):
+def solve_rep(A, b, x0, R, P, residuals=[]):
     tol = 1e-3
-    residuals = r_norms
     maxiter = 1
 
     A2 = R @ A @ P
@@ -144,6 +161,57 @@ def solve_rep(A, b, x0, R, P, r_norms=[]):
             return x
 
 
+def solve_rep_Anorm(A, b, x0, R, P, residuals=[]):
+    tol = 1e-3
+    maxiter = 1
+
+    A2 = R @ A @ P
+
+    x = x0
+
+    normb = A_norm(A, b)
+    if normb == 0.0:
+        normb = 1.0  # set so that we have an absolute tolerance
+    # normr = np.linalg.norm(b - A @ x)
+    normr = A_norm(A, b - A @ x)
+    if residuals is not None:
+        residuals[:] = [normr]  # initial residual
+
+    b = np.ravel(b)
+    x = np.ravel(x)
+
+    it = 0
+    while True:  # it <= maxiter and normr >= tol:
+        gauss_seidel(A, x, b, iterations=1)  # presmoother
+
+        residual = b - A @ x
+
+        coarse_b = R @ residual  # restriction
+
+        coarse_x = np.zeros_like(coarse_b)
+
+        coarse_x[:] = scipy.sparse.linalg.spsolve(A2, coarse_b)
+
+        x += P @ coarse_x  # coarse grid correction
+
+        gauss_seidel(A, x, b, iterations=1)  # postsmoother
+
+        it += 1
+
+        # normr = np.linalg.norm(b - A @ x)
+        normr = A_norm(A, b - A @ x)
+        if residuals is not None:
+            residuals.append(normr)
+        if normr < tol * normb:
+            return x
+        if it == maxiter:
+            return x
+
+def A_norm(A,x):
+    '''
+    A-norm = x^T A x
+    '''
+    return x.T @ A @ x
 
 def gauss_seidel(A, x, b, iterations=1):
     if not sparse.isspmatrix_csr(A):

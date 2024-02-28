@@ -86,7 +86,7 @@ void load_external_animation()
     {
       pos_orig = pos_vis;
     }
-    string filename = proj_dir_path + "/results/" + to_string(i) + ".obj";
+    string filename = proj_dir_path + "/result/" + to_string(i) + ".obj";
     printf("Loading %s\n", filename.c_str());
     igl::readOBJ(filename, pos_vis, tri);
   }
@@ -311,7 +311,7 @@ void test()
 {
   // Load a mesh
   igl::readOFF(proj_dir_path + "/data/models/bunny.OFF", pos_vis, tri);
-  // igl::readOBJ(proj_dir_path + "/results/1.obj", pos_vis, tri);
+  // igl::readOBJ(proj_dir_path + "/result/1.obj", pos_vis, tri);
   pos_orig = pos_vis; // keep original position for reset
 
   num_particles = pos_vis.rows();

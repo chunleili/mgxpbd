@@ -31,3 +31,14 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_LIST_DIR}/lib ${CMAKE_BINARY_DIR}/extern/amgx/$<CONFIGURATION>
         )
+
+
+
+add_executable(amgx_capi_wrapper amgx_capi_wrapper.c)
+target_include_directories(amgx_capi_wrapper PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+target_link_libraries(amgx_capi_wrapper ${dyn_libs} )
+add_custom_command(
+        TARGET amgx_capi_wrapper  POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_LIST_DIR}/lib ${CMAKE_BINARY_DIR}/extern/amgx/$<CONFIGURATION>
+        )

@@ -33,6 +33,9 @@ using Eigen::VectorXf;
 using SpMat = Eigen::SparseMatrix<float>;
 using Triplet = Eigen::Triplet<float>;
 
+
+
+
 // constants
 const int N = 3;
 const int NV = (N + 1) * (N + 1);
@@ -46,7 +49,6 @@ const float alpha = compliance * (1.0 / h / h);
 const float omega = 0.5; // under-relaxing factor
 
 // control variables
-std::string proj_dir_path;
 unsigned num_particles = 0;
 unsigned frame_num = 0;
 constexpr unsigned end_frame = 1000;
@@ -61,6 +63,10 @@ std::vector<float> ls_residual(end_frame,0.0);
 bool use_off_diag = true;
 bool save_A_0 = false;
 bool report_iter_residual = true;
+std::filesystem::path p(__FILE__);
+std::filesystem::path prj_path = p.parent_path().parent_path();
+auto proj_dir_path = prj_path.string();
+std::string result_dir = proj_dir_path + "/result/test/";
 
 // typedefs
 using Vec3f = Eigen::Vector3f;
@@ -148,6 +154,7 @@ FORCE_INLINE float dot(const Vec3f &vec1, const Vec3f &vec2)
     return vec1.dot(vec2);
 }
 
+/*
 std::string get_proj_dir_path()
 {
     std::filesystem::path p(__FILE__);
@@ -159,7 +166,7 @@ std::string get_proj_dir_path()
 }
 // this code run before main, in case of user forget to call get_proj_dir_path()
 static string proj_dir_path_pre_get = get_proj_dir_path();
-
+*/
 
 /// @brief Usage: Timer t("timer_name");
 ///               t.start();
@@ -386,7 +393,7 @@ void write_obj_my_impl(std::string out_mesh_name, Field3f &pos, Eigen::MatrixXi 
 void write_obj(std::string name = "")
 {
     // tic();
-    std::string path = proj_dir_path + "/results/";
+    std::string path = result_dir;
     std::string out_mesh_name = path + std::to_string(frame_num) + ".obj";
     if (name != "")
     {
@@ -1341,8 +1348,8 @@ void substep_all_solver()
         update_constraints();
         fill_b();   //-C-alpha*lagrangian
 
-        int stop = 10;
-        if(frame_num==stop)
+        int stop_frame = 100;
+        if(frame_num==stop_frame)
         {
             auto filename_A = proj_dir_path + "/result/A_"+to_string(stop)+"_N"+to_string(N)+".mtx";
             auto filename_b = proj_dir_path + "/result/b_"+to_string(stop)+"_N"+to_string(N)+".txt";

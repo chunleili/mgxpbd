@@ -12,10 +12,10 @@
 #include <algorithm>
 #include <unordered_set>
 
-#include <Eigen/Core>
-#include <Eigen/Dense>
-#include <Eigen/Sparse>
-#include <unsupported/Eigen/SparseExtra>
+#include "Eigen/Core"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
+#include "unsupported/Eigen/SparseExtra"
 
 #ifdef USE_LIBIGL
 #include <igl/readOBJ.h>
@@ -34,7 +34,7 @@ using SpMat = Eigen::SparseMatrix<float>;
 using Triplet = Eigen::Triplet<float>;
 
 // constants
-const int N = 64;
+const int N = 3;
 const int NV = (N + 1) * (N + 1);
 const int NT = 2 * N * N;
 const int NE = 2 * N * (N + 1) + N * N;
@@ -415,9 +415,9 @@ void remove_duplicate(std::vector<int> &vec)
     sort( vec.begin(), vec.end() );
 }
 
-void clean_results_dir()
+void clean_result_dir()
 {
-    std::string path = proj_dir_path + "/results/";
+    std::string path = proj_dir_path + "/result/";
 
     for (const auto& entry : std::filesystem::directory_iterator(path)) 
     {
@@ -427,7 +427,7 @@ void clean_results_dir()
         }
     }
 
-    std::cout<<"clean results dir done."<<endl;
+    std::cout<<"clean result dir done."<<endl;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1026,8 +1026,10 @@ void fill_A()
             Vec3f g_ab = normalize(pos[a] - pos[b]);
             Vec3f g_ac = normalize(pos[a] - pos[c]);
             float off_diag = inv_mass[a] * dot(g_ab, g_ac);
-
-            A.coeffRef(i,ia) = off_diag;
+            if (off_diag < 0)
+            {
+                A.coeffRef(i,ia) = off_diag;
+            }
         }
     }
     // A.makeCompressed();
@@ -1314,7 +1316,7 @@ void solve_amg(const SpMat& A_=A, const VectorXf& b_=b, VectorXf &x_=dLambda)
         coarse_x.setZero();
         easy_gauss_seidel(A2, coarse_b, coarse_x); //coarse solve
         x_ += P * coarse_x; // prolongation
-        // easy_gauss_seidel(A_, b_, x_); // smooth
+        easy_gauss_seidel(A_, b_, x_); // smooth
         normr = (b_ - A_ * x_).norm();
     }
 }
@@ -1342,8 +1344,8 @@ void substep_all_solver()
         int stop = 10;
         if(frame_num==stop)
         {
-            auto filename_A = proj_dir_path + "/data/misc/A_"+to_string(stop)+"_N"+to_string(N)+".mtx";
-            auto filename_b = proj_dir_path + "/data/misc/b_"+to_string(stop)+"_N"+to_string(N)+".txt";
+            auto filename_A = proj_dir_path + "/result/A_"+to_string(stop)+"_N"+to_string(N)+".mtx";
+            auto filename_b = proj_dir_path + "/result/b_"+to_string(stop)+"_N"+to_string(N)+".txt";
             saveMatrix(A, filename_A);
             saveVector(b, filename_b);
             exit(0);
@@ -1553,7 +1555,7 @@ int main(int argc, char *argv[])
     
     t_main.start();
 
-    clean_results_dir();
+    clean_result_dir();
 
     num_particles = NV;
     printf("num_particles = %d\n", num_particles);

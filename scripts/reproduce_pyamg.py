@@ -27,9 +27,9 @@ def test_amg(mat_size = 10):
         A, b = generate_A_b_pyamg(n=mat_size)
     else:
         print("loading data...")
-        A = scipy.io.mmread(f"C:/Dev/mgxpbd/data/misc/A_10_N{N}.mtx")
+        A = scipy.io.mmread(f"data/misc/A_10_N{N}.mtx")
         A = A.tocsr()
-        b = np.loadtxt(f"C:/Dev/mgxpbd/data/misc/b_10_N{N}.txt", dtype=np.float32)
+        b = np.loadtxt(f"data/misc/b_10_N{N}.txt", dtype=np.float32)
 
     # generate R by pyamg
     ml = pyamg.ruge_stuben_solver(A, max_levels=2)

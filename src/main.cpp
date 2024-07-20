@@ -37,7 +37,7 @@ using Triplet = Eigen::Triplet<float>;
 
 
 // constants
-const int N = 3;
+const int N = 64;
 const int NV = (N + 1) * (N + 1);
 const int NT = 2 * N * N;
 const int NE = 2 * N * (N + 1) + N * N;
@@ -1351,10 +1351,10 @@ void substep_all_solver()
         int stop_frame = 100;
         if(frame_num==stop_frame)
         {
-            auto filename_A = proj_dir_path + "/result/A_"+to_string(stop)+"_N"+to_string(N)+".mtx";
-            auto filename_b = proj_dir_path + "/result/b_"+to_string(stop)+"_N"+to_string(N)+".txt";
-            saveMatrix(A, filename_A);
-            saveVector(b, filename_b);
+            // auto filename_A = proj_dir_path + "/result/A_"+to_string(stop)+"_N"+to_string(N)+".mtx";
+            // auto filename_b = proj_dir_path + "/result/b_"+to_string(stop)+"_N"+to_string(N)+".txt";
+            // saveMatrix(A, filename_A);
+            // saveVector(b, filename_b);
             exit(0);
         }
 
@@ -1509,7 +1509,7 @@ void initialization()
     init_pos();
     init_edge();
     init_tri();
-    load_R_P();
+    // load_R_P();
     fill_M_inv();
     fill_ALPHA();
     init_v2e();

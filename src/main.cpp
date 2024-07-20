@@ -66,7 +66,7 @@ bool report_iter_residual = true;
 std::filesystem::path p(__FILE__);
 std::filesystem::path prj_path = p.parent_path().parent_path();
 auto proj_dir_path = prj_path.string();
-std::string result_dir = proj_dir_path + "/result/test/";
+std::string result_dir = proj_dir_path + "/result/lastest/";
 
 // typedefs
 using Vec3f = Eigen::Vector3f;
